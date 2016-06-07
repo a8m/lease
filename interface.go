@@ -30,7 +30,7 @@ func (l *Lease) hasNoOwner() bool {
 	return l.Owner == "NULL" || l.Owner == ""
 }
 
+// Leaser is the interface that wraps the Coordinator.GetLeases method.
 type Leaser interface {
-	// Leaser is the interface that wraps the Coordinator.GetLeases method.
 	GetLeases() []*Lease
 }

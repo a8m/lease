@@ -51,6 +51,10 @@ func (c *Config) defaults() {
 	if c.ExpireAfter == 0 {
 		c.ExpireAfter = time.Minute * 5
 	}
+	if c.MaxLeasesToStealAtOneTime == 0 {
+		c.MaxLeasesToStealAtOneTime = 1
+	}
+	falseOrPanic(c.MaxLeasesToStealAtOneTime < 0, "leases: MaxLeasesToStealAtOneTime should be greater or equal to 1")
 	falseOrPanic(c.ExpireAfter < time.Minute, "leases: ExpireAfter must be greater or equal to 1m")
 	falseOrPanic(c.OwnerId == "", "leases: OwnerId is required field")
 	falseOrPanic(c.Table == "", "leases: Table is required field")

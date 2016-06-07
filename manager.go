@@ -22,6 +22,9 @@ const (
 
 	// number of retries on update operation.
 	NumOfRetries = 3
+
+	// time to sleep between retries
+	RetrySleep = time.Second * 5
 )
 
 // Manager wrap the basic operations for leases.
@@ -98,26 +101,36 @@ func (l *LeaseManager) UpdateLease(lease *Lease) (err error) {
 		})
 		if err == nil {
 			break
+		} else if i-1 < NumOfRetries {
+			l.Logger.WithError(err).Infof("Worker %s failed to update lease. sleep for 5s", l.OwnerId)
+			time.Sleep(time.Second * 5)
 		}
 	}
 	return err
 }
 
 // ListLeasses returns all the lease units stored in the table.
-func (l *LeaseManager) ListLeases() ([]*Lease, error) {
-	res, err := l.Client.Scan(&dynamodb.ScanInput{
-		TableName: aws.String(l.Table),
-	})
-	if err != nil {
-		return nil, err
-	}
-	var list []*Lease
-	for _, item := range res.Items {
-		lease := new(Lease)
-		if err := dynamodbattribute.UnmarshalMap(item, lease); err == nil {
-			list = append(list, lease)
-			lease.lastRenewal = time.Now()
+func (l *LeaseManager) ListLeases() (list []*Lease, err error) {
+	for i := 0; i < NumOfRetries; i++ {
+		res, err := l.Client.Scan(&dynamodb.ScanInput{
+			TableName: aws.String(l.Table),
+		})
+		if err != nil {
+			if i-1 < NumOfRetries {
+				l.Logger.WithError(err).Infof("Worker %s failed to scan leases table. sleep for 5s", l.OwnerId)
+				time.Sleep(RetrySleep)
+				continue
+			}
+		} else {
+			for _, item := range res.Items {
+				lease := new(Lease)
+				if err := dynamodbattribute.UnmarshalMap(item, lease); err == nil {
+					list = append(list, lease)
+					lease.lastRenewal = time.Now()
+				}
+			}
+			break
 		}
 	}
-	return list, nil
+	return list, err
 }

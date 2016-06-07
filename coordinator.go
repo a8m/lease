@@ -14,8 +14,12 @@ type Coordinator struct {
 }
 
 // NewCoordinator create new Coordinator with the given config.
-func NewCoordinator(config *Config) *Coordinator {
+func NewCoordinator(config *Config) (*Coordinator, error) {
 	manager := &LeaseManager{config}
+	err := manager.CreateLeaseTable()
+	if err != nil {
+		return nil, err
+	}
 	c := &Coordinator{
 		Config: config,
 		done:   make(chan struct{}),
@@ -61,14 +65,14 @@ func (c *Coordinator) loop() {
 	for {
 		// Take(or steal leases)
 		if err := c.taker.Take(); err != nil {
-			c.Logger.Infof("Worker %s failed to take leases", c.OwnerId)
+			c.Logger.WithError(err).Infof("Worker %s failed to take leases", c.OwnerId)
 		} else {
 			c.Logger.Infof("Worker %s finish to take leases successfully", c.OwnerId)
 		}
 
 		// Renew old leases
 		if err := c.renewer.Renew(); err != nil {
-			c.Logger.Infof("Worker %s failed to renew its leases", c.OwnerId)
+			c.Logger.WithError(err).Infof("Worker %s failed to renew its leases", c.OwnerId)
 		} else {
 			c.Logger.Infof("Worker %s finish to renew leases successfully", c.OwnerId)
 		}
