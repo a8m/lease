@@ -26,23 +26,37 @@ type Backoff interface {
 	Duration() time.Duration
 }
 
+// Logger represents the API of both Logger and Entry.
+type Logger interface {
+	WithFields(logrus.Fields) *logrus.Entry
+	WithField(string, interface{}) *logrus.Entry
+	WithError(error) *logrus.Entry
+	Debug(...interface{})
+	Info(...interface{})
+	Error(...interface{})
+	Fatal(...interface{})
+	Debugf(string, ...interface{})
+	Infof(string, ...interface{})
+	Warnf(string, ...interface{})
+}
+
 type Config struct {
 	// Client is a Clientface implemetation.
 	Client Clientface
+
+	// Logger is the logger used. defaults to log.Log
+	Logger Logger
+
+	// Backoff determines the backoff strategy for http failures.
+	// Defaults to backoff.Backoff with min value of time.Second and jitter
+	// set to true.
+	Backoff Backoff
 
 	// The Amazon DynamoDB table name used for tracking leases.
 	LeaseTable string
 
 	// WorkerId used as a lease-owner.
 	WorkerId string
-
-	// Logger is the logger used. defaults to logrus.Log
-	Logger *logrus.Logger
-
-	// Backoff determines the backoff strategy for http failures.
-	// Defaults to backoff.Backoff with min value of time.Second and jitter
-	// set to true.
-	Backoff Backoff
 
 	// ExpireAfter indicate how long lease unit can live without renovation
 	// before expiration.
@@ -64,45 +78,64 @@ type Config struct {
 	LeaseTableWriteCap int
 }
 
+// defaults for configuration.
 func (c *Config) defaults() {
 	if c.Logger == nil {
 		c.Logger = logrus.New()
 	}
+	c.Logger = c.Logger.WithField("package", "leases")
+
 	if c.Client == nil {
 		c.Client = dynamodb.New(session.New(aws.NewConfig()))
 	}
+
 	if c.Backoff == nil {
 		c.Backoff = &backoff.Backoff{
 			Min:    time.Second,
 			Jitter: true,
 		}
 	}
+
+	if c.LeaseTable == "" {
+		c.Logger.Fatal("LeaseTable is required field")
+	}
+
 	if c.ExpireAfter == 0 {
 		c.ExpireAfter = time.Minute * 5
 	}
+	if c.ExpireAfter < time.Minute {
+		c.Logger.Fatal("ExpireAfter must be greater or equal to 1m")
+	}
+
 	if c.MaxLeasesToStealAtOneTime == 0 {
 		c.MaxLeasesToStealAtOneTime = 1
 	}
-	falseOrPanic(c.MaxLeasesToStealAtOneTime < 0, "leases: MaxLeasesToStealAtOneTime should be greater than 0")
+	if c.MaxLeasesToStealAtOneTime < 0 {
+		c.Logger.Fatal("MaxLeasesToStealAtOneTime should be greater than 0")
+	}
+
 	if c.LeaseTableReadCap == 0 {
 		c.LeaseTableReadCap = 10
 	}
-	falseOrPanic(c.LeaseTableReadCap < 0, "leases: LeaseTableReadCap must be greater than 0")
+	if c.LeaseTableReadCap < 0 {
+		c.Logger.Fatal("LeaseTableReadCap must be greater than 0")
+	}
+
 	if c.LeaseTableWriteCap == 0 {
 		c.LeaseTableWriteCap = 10
 	}
-	falseOrPanic(c.LeaseTableWriteCap < 0, "leases: LeaseTableWriteCap must be greater than 0")
+	if c.LeaseTableWriteCap < 0 {
+		c.Logger.Fatal("LeaseTableWriteCap must be greater than 0")
+	}
+
 	if c.WorkerId == "" {
 		wid, err := uuid()
 		if err != nil {
-			panic("leases: failed to generate uuid. WorkerId is required field")
+			c.Logger.Fatal("Failed to generate uuid. WorkerId is required field")
 		}
 		c.Logger.Infof("WorkerId does not provided in config. WorkerId is automatically assigned as: %s", wid)
 		c.WorkerId = wid
 	}
-	falseOrPanic(c.MaxLeasesToStealAtOneTime < 0, "leases: MaxLeasesToStealAtOneTime should be greater or equal to 1")
-	falseOrPanic(c.ExpireAfter < time.Minute, "leases: ExpireAfter must be greater or equal to 1m")
-	falseOrPanic(c.LeaseTable == "", "leases: Table is required field")
 }
 
 func uuid() (string, error) {
@@ -111,10 +144,4 @@ func uuid() (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
-}
-
-func falseOrPanic(p bool, msg string) {
-	if p {
-		panic(msg)
-	}
 }
