@@ -29,14 +29,14 @@ func (l *LeaseHolder) Renew() error {
 
 	heldLeases := make(map[string]*Lease)
 	for _, lease := range list {
-		if lease.Owner == l.OwnerId {
+		if lease.Owner == l.WorkerId {
 			heldLeases[lease.Key] = lease
 			if err := l.renewLease(lease); err != nil {
-				l.Logger.Debug("Worker %s could not renew lease with key %s", l.OwnerId, lease.Key)
+				l.Logger.Debug("Worker %s could not renew lease with key %s", l.WorkerId, lease.Key)
 			}
 		} else {
 			if _, ok := l.heldLeases[lease.Key]; ok {
-				l.Logger.Debugf("Worker %s lost lease with key %s", l.OwnerId, lease.Key)
+				l.Logger.Debugf("Worker %s lost lease with key %s", l.WorkerId, lease.Key)
 			}
 		}
 	}
@@ -44,7 +44,7 @@ func (l *LeaseHolder) Renew() error {
 	l.heldLeases = heldLeases
 	l.Unlock()
 	// print held leases belongs to our worker.
-	l.Logger.Debugf("Worker %s hold leases: %s", l.OwnerId, strings.Join(l.keys(), ", "))
+	l.Logger.Debugf("Worker %s hold leases: %s", l.WorkerId, strings.Join(l.keys(), ", "))
 	return nil
 }
 

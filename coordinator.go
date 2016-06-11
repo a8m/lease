@@ -5,6 +5,9 @@ import (
 	"time"
 )
 
+// Coordinator abstracts away LeaseTaker and LeaseRenewer from the
+// application code that's using leasing and it owns the scheduling of
+// the two previously mentioned components.
 type Coordinator struct {
 	*Config
 	rand    *rand.Rand
@@ -15,9 +18,9 @@ type Coordinator struct {
 
 // NewCoordinator create new Coordinator with the given config.
 func NewCoordinator(config *Config) (*Coordinator, error) {
+	config.defaults()
 	manager := &LeaseManager{config}
-	err := manager.CreateLeaseTable()
-	if err != nil {
+	if err := manager.CreateLeaseTable(); err != nil {
 		return nil, err
 	}
 	c := &Coordinator{
@@ -37,7 +40,7 @@ func NewCoordinator(config *Config) (*Coordinator, error) {
 	}
 	// start background LeaseHolder and LeaseTaker handling
 	go c.loop()
-	return c
+	return c, nil
 }
 
 // Returns copy of the current held leases.
@@ -65,16 +68,16 @@ func (c *Coordinator) loop() {
 	for {
 		// Take(or steal leases)
 		if err := c.taker.Take(); err != nil {
-			c.Logger.WithError(err).Infof("Worker %s failed to take leases", c.OwnerId)
+			c.Logger.WithError(err).Infof("Worker %s failed to take leases", c.WorkerId)
 		} else {
-			c.Logger.Infof("Worker %s finish to take leases successfully", c.OwnerId)
+			c.Logger.Infof("Worker %s finish to take leases successfully", c.WorkerId)
 		}
 
 		// Renew old leases
 		if err := c.renewer.Renew(); err != nil {
-			c.Logger.WithError(err).Infof("Worker %s failed to renew its leases", c.OwnerId)
+			c.Logger.WithError(err).Infof("Worker %s failed to renew its leases", c.WorkerId)
 		} else {
-			c.Logger.Infof("Worker %s finish to renew leases successfully", c.OwnerId)
+			c.Logger.Infof("Worker %s finish to renew leases successfully", c.WorkerId)
 		}
 
 		select {
@@ -90,6 +93,6 @@ func (c *Coordinator) loop() {
 
 func (c *Coordinator) ticker() <-chan time.Time {
 	sleepTime := time.Duration(c.rand.Int63n(c.ExpireAfter.Nanoseconds() / 3))
-	c.Logger.Infof("Worker %s sleep for: %s", c.OwnerId, sleepTime)
+	c.Logger.Infof("Worker %s sleep for: %s", c.WorkerId, sleepTime)
 	return time.After(sleepTime)
 }

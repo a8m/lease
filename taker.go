@@ -52,7 +52,7 @@ func (l *LeaseTaker) Take() error {
 		}
 	}
 
-	myCount := leaseCounts[l.OwnerId]
+	myCount := leaseCounts[l.WorkerId]
 	numToReachTarget := target - myCount
 
 	if numToReachTarget <= 0 {
@@ -81,15 +81,15 @@ func (l *LeaseTaker) Take() error {
 		if err := l.takeLease(lease); err != nil {
 			l.Logger.Debugf("Could not take lease with key %s for worker %s",
 				lease.Key,
-				l.OwnerId)
+				l.WorkerId)
 		} else {
-			l.Logger.Debugf("Worker %s taked lease: %s successfully.", l.OwnerId, lease.Key)
+			l.Logger.Debugf("Worker %s taked lease: %s successfully.", l.WorkerId, lease.Key)
 		}
 	}
 
 	l.Logger.Debugf(`Worker %s saw %d total leases, %d available leases, %d workers,
 		Target is %d leases, I have %d leases, I plan to take %d leases, I will take %d leases`,
-		l.OwnerId,
+		l.WorkerId,
 		len(l.allLeases),
 		len(expiredLeases),
 		numWorkers,
@@ -103,7 +103,7 @@ func (l *LeaseTaker) Take() error {
 
 // Take a lease by incrementing its leaseCounter and setting its owner field
 func (l *LeaseTaker) takeLease(lease *Lease) (err error) {
-	lease.Owner = l.OwnerId
+	lease.Owner = l.WorkerId
 	lease.Counter++
 	return l.manager.UpdateLease(lease)
 }
@@ -138,7 +138,7 @@ func (l *LeaseTaker) chooseLeasesToSteal(leaseCounts map[string]int, needed, tar
 	if numLeasesToSteal <= 0 {
 		l.Logger.Debugf(`Worker %s not stealing from most loaded worker %s.  He has %d,
 		 target is %d, and I need %d`,
-			l.OwnerId,
+			l.WorkerId,
 			mostLoadedWorker,
 			leaseCounts[mostLoadedWorker],
 			target,
@@ -147,7 +147,7 @@ func (l *LeaseTaker) chooseLeasesToSteal(leaseCounts map[string]int, needed, tar
 	} else {
 		l.Logger.Debugf(`Worker %s will attempt to steal %d leases from most loaded worker %s.
 		 He has %d leases, target is %d, I need %d.`,
-			l.OwnerId,
+			l.WorkerId,
 			numLeasesToSteal,
 			mostLoadedWorker,
 			leaseCounts[mostLoadedWorker],
@@ -217,8 +217,8 @@ func (l *LeaseTaker) computeLeaseCounts() map[string]int {
 	}
 
 	// If I have no leases, I wasn't represented in leaseCounts. Let's fix that.
-	if _, ok := m[l.OwnerId]; !ok {
-		m[l.OwnerId] = 0
+	if _, ok := m[l.WorkerId]; !ok {
+		m[l.WorkerId] = 0
 	}
 
 	return m
