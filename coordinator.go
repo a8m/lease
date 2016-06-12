@@ -1,16 +1,19 @@
 package leases
 
-import (
-	"math/rand"
-	"time"
-)
+import "time"
 
 // Coordinator abstracts away LeaseTaker and LeaseRenewer from the
 // application code that's using leasing and it owns the scheduling of
 // the two previously mentioned components.
 type Coordinator struct {
 	*Config
-	rand    *rand.Rand
+
+	// Tick called inside the loop method and it resposible to
+	// set the "break" between iterations.
+	// for example: in our test cases, we don't want to sleep.
+	Tick func() <-chan time.Time
+
+	// coordinator state
 	renewer Renewer
 	taker   Taker
 	done    chan struct{}
@@ -36,8 +39,8 @@ func NewCoordinator(config *Config) (*Coordinator, error) {
 			manager:   manager,
 			allLeases: make(map[string]*Lease),
 		},
-		rand: rand.New(rand.NewSource(time.Now().UTC().UnixNano())),
 	}
+	c.Tick = defaultTick(c)
 	// start background LeaseHolder and LeaseTaker handling
 	go c.loop()
 	return c, nil
@@ -64,26 +67,22 @@ func (c *Coordinator) Stop() {
 // loop run forever and upadte leases periodically.
 func (c *Coordinator) loop() {
 	defer close(c.done)
-
 	for {
-		// Take(or steal leases)
-		if err := c.taker.Take(); err != nil {
-			c.Logger.WithError(err).Infof("Worker %s failed to take leases", c.WorkerId)
-		} else {
-			c.Logger.Infof("Worker %s finish to take leases successfully", c.WorkerId)
-		}
-
-		// Renew old leases
-		if err := c.renewer.Renew(); err != nil {
-			c.Logger.WithError(err).Infof("Worker %s failed to renew its leases", c.WorkerId)
-		} else {
-			c.Logger.Infof("Worker %s finish to renew leases successfully", c.WorkerId)
-		}
-
 		select {
-		// wait for a while and loop again.
-		case <-c.ticker():
-			continue
+		case <-c.Tick():
+			// Take(or steal leases)
+			if err := c.taker.Take(); err != nil {
+				c.Logger.WithError(err).Infof("Worker %s failed to take leases", c.WorkerId)
+			} else {
+				c.Logger.Infof("Worker %s finish to take leases successfully", c.WorkerId)
+			}
+
+			// Renew old leases
+			if err := c.renewer.Renew(); err != nil {
+				c.Logger.WithError(err).Infof("Worker %s failed to renew its leases", c.WorkerId)
+			} else {
+				c.Logger.Infof("Worker %s finish to renew leases successfully", c.WorkerId)
+			}
 		// or someone called stop and we need to exit.
 		case <-c.done:
 			return
@@ -91,8 +90,16 @@ func (c *Coordinator) loop() {
 	}
 }
 
-func (c *Coordinator) ticker() <-chan time.Time {
-	sleepTime := time.Duration(c.rand.Int63n(c.ExpireAfter.Nanoseconds() / 3))
-	c.Logger.Infof("Worker %s sleep for: %s", c.WorkerId, sleepTime)
-	return time.After(sleepTime)
+func defaultTick(c *Coordinator) func() <-chan time.Time {
+	firstTime := true
+	return func() <-chan time.Time {
+		var sleepTime time.Duration
+		if firstTime {
+			firstTime = false
+		} else {
+			sleepTime = time.Duration(c.ExpireAfter.Nanoseconds() / 3)
+			c.Logger.Infof("Worker %s sleep for: %s", c.WorkerId, sleepTime)
+		}
+		return time.After(sleepTime)
+	}
 }

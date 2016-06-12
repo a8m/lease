@@ -73,6 +73,7 @@ func (l *LeaseManager) CreateLeaseTable() (err error) {
 		}
 
 		if awsErr, ok := err.(awserr.RequestFailure); ok && awsErr.Code() == AlreadyExist {
+			err = nil
 			break
 		}
 
@@ -157,6 +158,7 @@ func (l *LeaseManager) ListLeases() (list []*Lease, err error) {
 				lease.lastRenewal = time.Now()
 			}
 		}
+		break
 	}
 	l.Backoff.Reset()
 	return

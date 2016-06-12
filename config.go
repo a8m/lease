@@ -26,7 +26,7 @@ type Backoff interface {
 	Duration() time.Duration
 }
 
-// Logger represents the API of both Logger and Entry.
+// Logger represents the desired API of both Logger and Entry.
 type Logger interface {
 	WithFields(logrus.Fields) *logrus.Entry
 	WithField(string, interface{}) *logrus.Entry
