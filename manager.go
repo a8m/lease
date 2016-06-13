@@ -40,12 +40,14 @@ type Manager interface {
 	ListLeases() ([]*Lease, error)
 }
 
-// LeaseManager is the default implemntation of Manager.
+// LeaseManager is the default implemntation of Manager
+// that uses DynamoDB.
 type LeaseManager struct {
 	*Config
 }
 
-// CreateLeaseTable creates the tables if it's not already exists.
+// CreateLeaseTable creates the table that will store the leases. succeeds
+// if it's  already exists.
 func (l *LeaseManager) CreateLeaseTable() (err error) {
 	for l.Backoff.Attempt() < maxCreateRetries {
 		_, err = l.Client.CreateTable(&dynamodb.CreateTableInput{

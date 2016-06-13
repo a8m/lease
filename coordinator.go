@@ -14,21 +14,19 @@ type Coordinator struct {
 	Tick func() <-chan time.Time
 
 	// coordinator state
+	manager Manager
 	renewer Renewer
 	taker   Taker
 	done    chan struct{}
 }
 
-// NewCoordinator create new Coordinator with the given config.
-func NewCoordinator(config *Config) (*Coordinator, error) {
+// New Coordinator with the given config.
+func NewCoordinator(config *Config) *Coordinator {
 	config.defaults()
 	manager := &LeaseManager{config}
-	if err := manager.CreateLeaseTable(); err != nil {
-		return nil, err
-	}
 	c := &Coordinator{
-		Config: config,
-		done:   make(chan struct{}),
+		Config:  config,
+		manager: manager,
 		renewer: &LeaseHolder{
 			Config:     config,
 			manager:    manager,
@@ -39,16 +37,20 @@ func NewCoordinator(config *Config) (*Coordinator, error) {
 			manager:   manager,
 			allLeases: make(map[string]*Lease),
 		},
+		done: make(chan struct{}),
 	}
 	c.Tick = defaultTick(c)
-	// start background LeaseHolder and LeaseTaker handling
-	go c.loop()
-	return c, nil
+	return c
 }
 
-// Returns copy of the current held leases.
-func (c *Coordinator) GetLeases() []*Lease {
-	return c.renewer.GetHeldLeases()
+// Start create the leases table if it's not exist and
+// then start background LeaseHolder and LeaseTaker handling.
+func (c *Coordinator) Start() error {
+	if err := c.manager.CreateLeaseTable(); err != nil {
+		return err
+	}
+	go c.loop()
+	return nil
 }
 
 // Stop the coordinator gracefully. wait for background tasks to complete.
@@ -62,6 +64,11 @@ func (c *Coordinator) Stop() {
 	<-c.done
 
 	c.Logger.Info("stopped coordinator")
+}
+
+// Returns copy of the current held leases.
+func (c *Coordinator) GetLeases() []*Lease {
+	return c.renewer.GetHeldLeases()
 }
 
 // loop run forever and upadte leases periodically.
