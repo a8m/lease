@@ -80,15 +80,10 @@ func (c *Coordinator) loop() {
 			// Take(or steal leases)
 			if err := c.taker.Take(); err != nil {
 				c.Logger.WithError(err).Infof("Worker %s failed to take leases", c.WorkerId)
-			} else {
-				c.Logger.Infof("Worker %s finish to take leases successfully", c.WorkerId)
 			}
-
 			// Renew old leases
 			if err := c.renewer.Renew(); err != nil {
 				c.Logger.WithError(err).Infof("Worker %s failed to renew its leases", c.WorkerId)
-			} else {
-				c.Logger.Infof("Worker %s finish to renew leases successfully", c.WorkerId)
 			}
 		// or someone called stop and we need to exit.
 		case <-c.done:

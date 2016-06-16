@@ -9,9 +9,6 @@ import (
 // Each LeaseCoordinator instance corresponds to one worker and uses exactly one LeaseRenewer
 // to manage lease renewal for that worker.
 type Renewer interface {
-	// TODO:
-	// Proposal: Renew method will return (int, error) -
-	// the int will represent the number of leases that this worker holds
 	Renew() error
 	GetHeldLeases() []*Lease
 }
