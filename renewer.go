@@ -30,19 +30,19 @@ func (l *LeaseHolder) Renew() error {
 	}
 
 	// remove leases that deleted from the DynamoDB table.
-	lostLeases := make([]string)
-	for _, hlease := range l.heldLeases {
+	lostLeases := make([]string, 0)
+	for key, _ := range l.heldLeases {
 		exist := false
-		for lease := range leases {
-			if lease.Key == hlease.Key {
+		for _, lease := range leases {
+			if lease.Key == key {
 				exist = true
 			}
 		}
 		if !exist {
 			l.Lock()
-			delete(l.heldLeases, hlease.Key)
+			delete(l.heldLeases, key)
 			l.Unlock()
-			lostLeases = append(lostLeases, hlease.Key)
+			lostLeases = append(lostLeases, key)
 		}
 	}
 	if n := len(lostLeases); n > 0 {

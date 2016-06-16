@@ -4,13 +4,6 @@ import (
 	"math/rand"
 )
 
-const (
-	// Max leases to steal from a more loaded Worker at one time (for load balancing).
-	// Setting this to a higher number can allow for faster load convergence (e.g. during autoscaling, etc..),
-	// but can cause higher churn in the system.
-	maxLeasesToStealAtOneTime = 1
-)
-
 // Taker is the interface that wraps the Take method.
 type Taker interface {
 	Take() error
@@ -132,7 +125,7 @@ func (l *LeaseTaker) chooseLeasesToSteal(leaseCounts map[string]int, needed, tar
 		if needed > 1 && numLeasesToSteal == 0 {
 			numLeasesToSteal = 1
 		}
-		numLeasesToSteal = min(numLeasesToSteal, maxLeasesToStealAtOneTime)
+		numLeasesToSteal = min(numLeasesToSteal, l.MaxLeasesToStealAtOneTime)
 	}
 
 	if numLeasesToSteal <= 0 {
