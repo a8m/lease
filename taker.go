@@ -30,7 +30,7 @@ type LeaseTaker struct {
 //
 // 1) If a lease's counter hasn't changed in long enough(i.e: "expired") set its owner to null.
 // 2) Compute the "leases per worker" and the number we should take.
-// 3) If we need to take leases, try to take expired leases. if there's no expired, consider stealing.
+// 3) If we need to take leases, try to take expired leases. if there are no expired leases, consider stealing.
 func (l *LeaseTaker) Take() error {
 	list, err := l.manager.ListLeases()
 	if err != nil {
@@ -79,9 +79,9 @@ func (l *LeaseTaker) Take() error {
 
 	for _, lease := range leasesToTake {
 		if err := l.takeLease(lease); err != nil {
-			l.Logger.Debugf("Could not take lease with key %s for worker %s",
-				lease.Key,
-				l.WorkerId)
+			l.Logger.Debugf("Worker %s could not take lease with key %s.",
+				l.WorkerId,
+				lease.Key)
 		} else {
 			l.Logger.Debugf("Worker %s taked lease: %s successfully.", l.WorkerId, lease.Key)
 		}

@@ -97,6 +97,8 @@ func (c *Coordinator) loop() {
 	}
 }
 
+// default tick function.
+// used inside the loop method to set the "break" between iterations
 func defaultTick(c *Coordinator) func() <-chan time.Time {
 	firstTime := true
 	return func() <-chan time.Time {

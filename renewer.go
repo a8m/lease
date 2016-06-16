@@ -5,30 +5,44 @@ import (
 	"sync"
 )
 
-// Renewer in the interface that wraps the Renew and GetHeldLeases methods.
+// LeaseRenewer used by the LeaseCoordinator to renew leases held by the system.
+// Each LeaseCoordinator instance corresponds to one worker and uses exactly one LeaseRenewer
+// to manage lease renewal for that worker.
 type Renewer interface {
+	// TODO:
+	// Proposal: Renew method will return (int, error) -
+	// the int will represent the number of leases that this worker holds
 	Renew() error
 	GetHeldLeases() []*Lease
 }
 
-// LeaseHolder used by the LeaseCoordinator to renew held leases.
+// LeaseHolder is the default implementation of Renewer that uses DynamoDB
+// via LeaseManager
 type LeaseHolder struct {
 	sync.Mutex
 	*Config
-	manager Manager
-
+	manager    Manager
 	heldLeases map[string]*Lease
 }
 
 // Attempt to renew all currently held leases.
 func (l *LeaseHolder) Renew() error {
-	list, err := l.manager.ListLeases()
+	leases, err := l.manager.ListLeases()
 	if err != nil {
 		return err
 	}
 
+	// remove leases that deleted from the DynamoDB table.
+	for _, hlease := range l.heldLeases {
+		exist := false
+		for lease := range leases {
+			if lease.Key == hlease.Key {
+			}
+		}
+	}
+
 	heldLeases := make(map[string]*Lease)
-	for _, lease := range list {
+	for _, lease := range leases {
 		if lease.Owner == l.WorkerId {
 			heldLeases[lease.Key] = lease
 			if err := l.renewLease(lease); err != nil {
@@ -40,11 +54,14 @@ func (l *LeaseHolder) Renew() error {
 			}
 		}
 	}
+
 	l.Lock()
 	l.heldLeases = heldLeases
 	l.Unlock()
 	// print held leases belongs to our worker.
-	l.Logger.Debugf("Worker %s hold leases: %s", l.WorkerId, strings.Join(l.keys(), ", "))
+	if keys := l.keys(); len(keys) > 0 {
+		l.Logger.Debugf("Worker %s hold leases: %s", l.WorkerId, strings.Join(keys, ", "))
+	}
 	return nil
 }
 
@@ -55,13 +72,16 @@ func (l *LeaseHolder) renewLease(lease *Lease) (err error) {
 	return l.manager.UpdateLease(lease)
 }
 
-// Returns copy of the current held leases.
-func (l *LeaseHolder) GetHeldLeases() (list []*Lease) {
+// Returns currently held leases.
+// A lease is currently held if we successfully renewed it on the last
+// run of Renew()
+// Lease objects returned are copies and their lease counters will not tick.
+func (l *LeaseHolder) GetHeldLeases() (leases []*Lease) {
 	l.Lock()
 	defer l.Unlock()
 	for _, lease := range l.heldLeases {
 		copy := *lease
-		list = append(list, &copy)
+		leases = append(leases, &copy)
 	}
 	return
 }
