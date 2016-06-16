@@ -33,32 +33,49 @@ func (l *LeaseHolder) Renew() error {
 	}
 
 	// remove leases that deleted from the DynamoDB table.
+	lostLeases := make([]string)
 	for _, hlease := range l.heldLeases {
 		exist := false
 		for lease := range leases {
 			if lease.Key == hlease.Key {
+				exist = true
 			}
 		}
+		if !exist {
+			l.Lock()
+			delete(l.heldLeases, hlease.Key)
+			l.Unlock()
+			lostLeases = append(lostLeases, hlease.Key)
+		}
+	}
+	if n := len(lostLeases); n > 0 {
+		l.Logger.Debugf("Worker %s lost %d leases due deprecation: %s",
+			l.WorkerId,
+			n,
+			strings.Join(lostLeases, ", "))
 	}
 
-	heldLeases := make(map[string]*Lease)
+	// remove all the leases that stoled from this worker, or renew the leases
+	// that we still hold.
 	for _, lease := range leases {
 		if lease.Owner == l.WorkerId {
-			heldLeases[lease.Key] = lease
+			l.Lock()
+			l.heldLeases[lease.Key] = lease
+			l.Unlock()
 			if err := l.renewLease(lease); err != nil {
 				l.Logger.Debug("Worker %s could not renew lease with key %s", l.WorkerId, lease.Key)
 			}
 		} else {
 			if _, ok := l.heldLeases[lease.Key]; ok {
 				l.Logger.Debugf("Worker %s lost lease with key %s", l.WorkerId, lease.Key)
+				l.Lock()
+				delete(l.heldLeases, lease.Key)
+				l.Unlock()
 			}
 		}
 	}
 
-	l.Lock()
-	l.heldLeases = heldLeases
-	l.Unlock()
-	// print held leases belongs to our worker.
+	// print the currently held leases belongs to this worker.
 	if keys := l.keys(); len(keys) > 0 {
 		l.Logger.Debugf("Worker %s hold leases: %s", l.WorkerId, strings.Join(keys, ", "))
 	}
