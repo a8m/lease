@@ -73,7 +73,7 @@ func (l *LeaseTaker) Take() error {
 	}
 
 	for _, lease := range leasesToTake {
-		if err := l.takeLease(lease); err != nil {
+		if err := l.manager.TakeLease(lease); err != nil {
 			l.Logger.Debugf("Worker %s could not take lease with key %s.",
 				l.WorkerId,
 				lease.Key)
@@ -83,8 +83,8 @@ func (l *LeaseTaker) Take() error {
 	}
 
 	if len(leasesToTake) > 0 {
-		l.Logger.Debugf(`Worker %s saw %d total leases, %d available leases, %d workers,
-		Target is %d leases, I have %d leases, I plan to take %d leases, I will take %d leases`,
+		l.Logger.Debugf("Worker %s saw %d total leases, %d available leases, %d workers.\n"+
+			"Target is %d leases, I have %d leases, I plan to take %d leases, I will take %d leases",
 			l.WorkerId,
 			len(l.allLeases),
 			len(expiredLeases),
@@ -96,21 +96,6 @@ func (l *LeaseTaker) Take() error {
 	}
 
 	return nil
-}
-
-// Take a lease by incrementing its leaseCounter and setting its owner field.
-// TODO: Add conditional on the leaseCounter in DynamoDB matching the leaseCounter of the input
-func (l *LeaseTaker) takeLease(lease *Lease) (err error) {
-	lease.Owner = l.WorkerId
-	lease.Counter++
-	return l.manager.UpdateLease(lease)
-}
-
-// Evict the current owner of lease by setting owner to null
-// TODO: Add conditional on the owner in DynamoDB matching the owner of the input.
-func (l *LeaseTaker) evictLease(lease *Lease) error {
-	lease.Owner = "NULL"
-	return l.manager.UpdateLease(lease)
 }
 
 // Choose leases to steal by randomly selecting one or more (up to max) from the most loaded worker.
@@ -139,8 +124,8 @@ func (l *LeaseTaker) chooseLeasesToSteal(leaseCounts map[string]int, needed, tar
 	}
 
 	if numLeasesToSteal <= 0 {
-		l.Logger.Debugf(`Worker %s not stealing from most loaded worker %s.  He has %d,
-		 target is %d, and I need %d`,
+		l.Logger.Debugf("Worker %s not stealing from most loaded worker %s.\n"+
+			"He has %d, target is %d, and I need %d.",
 			l.WorkerId,
 			mostLoadedWorker,
 			leaseCounts[mostLoadedWorker],
@@ -148,8 +133,8 @@ func (l *LeaseTaker) chooseLeasesToSteal(leaseCounts map[string]int, needed, tar
 			needed)
 		return nil
 	} else {
-		l.Logger.Debugf(`Worker %s will attempt to steal %d leases from most loaded worker %s.
-		 He has %d leases, target is %d, I need %d.`,
+		l.Logger.Debugf("Worker %s will attempt to steal %d leases from most loaded worker %s.\n"+
+			"He has %d leases, target is %d, and I need %d.",
 			l.WorkerId,
 			numLeasesToSteal,
 			mostLoadedWorker,
@@ -180,7 +165,7 @@ func (l *LeaseTaker) updateLeases(list []*Lease) {
 				allLeases[oldLease.Key] = newLease
 			} else {
 				if oldLease.isExpired(l.ExpireAfter) {
-					err := l.evictLease(oldLease)
+					err := l.manager.EvictLease(oldLease)
 					if err != nil {
 						l.Logger.Error(err)
 					}

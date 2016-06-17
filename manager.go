@@ -32,11 +32,17 @@ type Manager interface {
 	// Creates the table that will store leases if it's not already exists.
 	CreateLeaseTable() error
 
-	// Update lease object state.
-	UpdateLease(*Lease) error
-
 	// List all leases(objects) in table.
 	ListLeases() ([]*Lease, error)
+
+	// Renew a lease
+	RenewLease(*Lease) error
+
+	// Take a lease
+	TakeLease(*Lease) error
+
+	// Evict a lease
+	EvictLease(*Lease) error
 }
 
 // LeaseManager is the default implemntation of Manager
@@ -91,23 +97,67 @@ func (l *LeaseManager) CreateLeaseTable() (err error) {
 	return
 }
 
+// Renew a lease by incrementing the lease counter.
+// Conditional on the leaseCounter in DynamoDB matching the leaseCounter of the input
+// Mutates the leaseCounter of the passed-in lease object after updating the record in DynamoDB.
+func (l *LeaseManager) RenewLease(lease *Lease) (err error) {
+	clease := *lease
+	clease.Counter++
+	if err = l.updateLease(clease, *lease); err == nil {
+		lease.Counter = clease.Counter
+	}
+	return
+}
+
+// Evict the current owner of lease by setting owner to null
+// Conditional on the owner in DynamoDB matching the owner of the input.
+// Mutates the lease owner of the passed-in lease object after updating the record in DynamoDB.
+func (l *LeaseManager) EvictLease(lease *Lease) (err error) {
+	clease := *lease
+	clease.Owner = "NULL"
+	if err = l.updateLease(clease, *lease); err == nil {
+		lease.Owner = clease.Owner
+	}
+	return
+}
+
+// Take a lease by incrementing its leaseCounter and setting its owner field.
+// Conditional on the leaseCounter in DynamoDB matching the leaseCounter of the input
+// Mutates the lease counter and owner of the passed-in lease object after updating the record in DynamoDB.
+func (l *LeaseManager) TakeLease(lease *Lease) (err error) {
+	clease := *lease
+	clease.Counter++
+	clease.Owner = l.WorkerId
+	if err = l.updateLease(clease, *lease); err == nil {
+		lease.Owner = clease.Owner
+		lease.Counter = clease.Counter
+	}
+	return
+}
+
 // UpdateLease gets a lease and update it in the leasing table.
-func (l *LeaseManager) UpdateLease(lease *Lease) (err error) {
+func (l *LeaseManager) updateLease(updateLease, condLease Lease) (err error) {
 	for l.Backoff.Attempt() < maxUpdateRetries {
 		_, err = l.Client.UpdateItem(&dynamodb.UpdateItemInput{
 			TableName: aws.String(l.LeaseTable),
 			Key: map[string]*dynamodb.AttributeValue{
 				LeaseKeyKey: {
-					S: aws.String(lease.Key),
+					S: aws.String(updateLease.Key),
 				},
 			},
 			ReturnValues: aws.String(dynamodb.ReturnValueAllNew),
 			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
 				":owner": {
-					S: aws.String(lease.Owner),
+					S: aws.String(updateLease.Owner),
 				},
 				":count": {
-					N: aws.String(strconv.Itoa(lease.Counter)),
+					N: aws.String(strconv.Itoa(updateLease.Counter)),
+				},
+				":condOwner": {
+					S: aws.String(condLease.Owner),
+				},
+				":condCounter": {
+					N: aws.String(strconv.Itoa(condLease.Counter)),
 				},
 			},
 			UpdateExpression: aws.String(fmt.Sprintf(
@@ -115,6 +165,11 @@ func (l *LeaseManager) UpdateLease(lease *Lease) (err error) {
 				LeaseOwnerKey,
 				LeaseCounterKey,
 			)),
+			ExpressionAttributeNames: map[string]*string{
+				"#counter": aws.String("leaseCounter"),
+				"#owner":   aws.String("leaseOwner"),
+			},
+			ConditionExpression: aws.String(":condCounter = #counter AND :condOwner = #owner"),
 		})
 
 		if err == nil {

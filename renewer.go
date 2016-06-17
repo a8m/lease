@@ -59,8 +59,8 @@ func (l *LeaseHolder) Renew() error {
 			l.Lock()
 			l.heldLeases[lease.Key] = lease
 			l.Unlock()
-			if err := l.renewLease(lease); err != nil {
-				l.Logger.Debug("Worker %s could not renew lease with key %s", l.WorkerId, lease.Key)
+			if err := l.manager.RenewLease(lease); err != nil {
+				l.Logger.Debugf("Worker %s could not renew lease with key %s", l.WorkerId, lease.Key)
 			}
 		} else {
 			if _, ok := l.heldLeases[lease.Key]; ok {
@@ -77,13 +77,6 @@ func (l *LeaseHolder) Renew() error {
 		l.Logger.Debugf("Worker %s hold leases: %s", l.WorkerId, strings.Join(keys, ", "))
 	}
 	return nil
-}
-
-// Renew a lease by incrementing the lease counter.
-// TODO: Add Conditional on the leaseCounter in DynamoDB matching the leaseCounter of the input
-func (l *LeaseHolder) renewLease(lease *Lease) (err error) {
-	lease.Counter++
-	return l.manager.UpdateLease(lease)
 }
 
 // Returns currently held leases.
