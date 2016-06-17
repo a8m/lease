@@ -34,7 +34,6 @@ func (l *LeaseTaker) Take() error {
 
 	leaseCounts := l.computeLeaseCounts()
 	numWorkers := len(leaseCounts)
-
 	// assuming numLeases <= numWorkers
 	target := 1
 	// our target for each worker is numLeases / numWorkers (+1 if numWorkers doesn't evenly divide numLeases)
@@ -49,7 +48,8 @@ func (l *LeaseTaker) Take() error {
 	numToReachTarget := target - myCount
 
 	if numToReachTarget <= 0 {
-		l.Logger.Debugf("There's no need to take leases. we have %d, and the target is: %d",
+		l.Logger.Debugf("Worker %s does not need to take leases. we have %d, and the target is: %d",
+			l.WorkerId,
 			myCount,
 			target)
 		return nil
@@ -66,7 +66,9 @@ func (l *LeaseTaker) Take() error {
 		}
 		leasesToTake = expiredLeases[:numToReachTarget]
 	} else {
-		l.Logger.Debug("There are no expired leases and we need a lease, consider stealing")
+		l.Logger.Debugf("Worker %s needed %d leases but none were expired. consider stealing",
+			l.WorkerId,
+			numToReachTarget)
 		leasesToTake = l.chooseLeasesToSteal(leaseCounts, numToReachTarget, target)
 	}
 
@@ -80,34 +82,42 @@ func (l *LeaseTaker) Take() error {
 		}
 	}
 
-	l.Logger.Debugf(`Worker %s saw %d total leases, %d available leases, %d workers,
+	if len(leasesToTake) > 0 {
+		l.Logger.Debugf(`Worker %s saw %d total leases, %d available leases, %d workers,
 		Target is %d leases, I have %d leases, I plan to take %d leases, I will take %d leases`,
-		l.WorkerId,
-		len(l.allLeases),
-		len(expiredLeases),
-		numWorkers,
-		target,
-		myCount,
-		numToReachTarget,
-		len(leasesToTake))
+			l.WorkerId,
+			len(l.allLeases),
+			len(expiredLeases),
+			numWorkers,
+			target,
+			myCount,
+			numToReachTarget,
+			len(leasesToTake))
+	}
 
 	return nil
 }
 
-// Take a lease by incrementing its leaseCounter and setting its owner field
+// Take a lease by incrementing its leaseCounter and setting its owner field.
+// TODO: Add conditional on the leaseCounter in DynamoDB matching the leaseCounter of the input
 func (l *LeaseTaker) takeLease(lease *Lease) (err error) {
 	lease.Owner = l.WorkerId
 	lease.Counter++
 	return l.manager.UpdateLease(lease)
 }
 
-// Evict the given lease by setting its owner to null.
+// Evict the current owner of lease by setting owner to null
+// TODO: Add conditional on the owner in DynamoDB matching the owner of the input.
 func (l *LeaseTaker) evictLease(lease *Lease) error {
 	lease.Owner = "NULL"
 	return l.manager.UpdateLease(lease)
 }
 
 // Choose leases to steal by randomly selecting one or more (up to max) from the most loaded worker.
+//
+// Steal up to maxLeasesToStealAtOneTime leases from the most loaded worker if
+// 1. he has > target leases and I need >= 1 leases : steal min(leases needed, maxLeasesToStealAtOneTime)
+// 2. he has == target leases and I need > 1 leases : steal 1
 func (l *LeaseTaker) chooseLeasesToSteal(leaseCounts map[string]int, needed, target int) []*Lease {
 	var mostLoadedWorker string
 	// find the most loaded worker
@@ -154,7 +164,6 @@ func (l *LeaseTaker) chooseLeasesToSteal(leaseCounts map[string]int, needed, tar
 			candidates = append(candidates, lease)
 		}
 	}
-
 	shuffle(candidates)
 
 	return candidates[:numLeasesToSteal]
@@ -226,7 +235,7 @@ func shuffle(list []*Lease) {
 }
 
 // simple min function implemetation.
-// that standard library accept float64. I want to ignore casting + reduce binary size.
+// the standard library accept float64. I want to ignore casting + reduce binary size.
 func min(i, j int) int {
 	if i > j {
 		return j
