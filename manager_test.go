@@ -2,8 +2,6 @@ package leases
 
 import (
 	"errors"
-	"fmt"
-	"testing"
 )
 
 type (
@@ -31,8 +29,6 @@ var methodNames = map[method]string{
 	methodList:   "ListLeases",
 }
 
-// Test cases:
-// 1. CreateLeaeTable - success, failed(first, and success)
 type managerMock struct {
 	calls  map[method]int  // method name: call times
 	result map[method]args // expected behavior
@@ -88,31 +84,4 @@ func (m *managerMock) ListLeases() (leases []*Lease, err error) {
 		err = errors.New("list leases failed")
 	}
 	return
-}
-
-func TestMock(t *testing.T) {
-	mock := newManagerMock(map[method]args{
-		methodCreate: args{
-			nil,
-			errors.New("sone fake error"),
-		},
-		methodRenew: args{
-			nil,
-			errors.New("sone fake error"),
-		},
-		methodList: args{
-			nil,
-			[]*Lease{
-				&Lease{Key: "foo"},
-				&Lease{Key: "bar"},
-			},
-		},
-	})
-	fmt.Println(mock.CreateLeaseTable())
-	fmt.Println(mock.CreateLeaseTable())
-	fmt.Println(mock.RenewLease(nil))
-	fmt.Println(mock.RenewLease(nil))
-	fmt.Println(mock.ListLeases())
-	fmt.Println(mock.ListLeases())
-	fmt.Println(mock)
 }

@@ -1,8 +1,6 @@
 package leases
 
-import (
-	"math/rand"
-)
+import "math/rand"
 
 // Taker is the interface that wraps the Take method.
 type Taker interface {

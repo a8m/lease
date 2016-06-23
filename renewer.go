@@ -10,7 +10,7 @@ import (
 // to manage lease renewal for that worker.
 type Renewer interface {
 	Renew() error
-	GetHeldLeases() []*Lease
+	GetHeldLeases() []Lease
 }
 
 // LeaseHolder is the default implementation of Renewer that uses DynamoDB
@@ -83,12 +83,11 @@ func (l *LeaseHolder) Renew() error {
 // A lease is currently held if we successfully renewed it on the last
 // run of Renew()
 // Lease objects returned are copies and their lease counters will not tick.
-func (l *LeaseHolder) GetHeldLeases() (leases []*Lease) {
+func (l *LeaseHolder) GetHeldLeases() (leases []Lease) {
 	l.Lock()
 	defer l.Unlock()
 	for _, lease := range l.heldLeases {
-		copy := *lease
-		leases = append(leases, &copy)
+		leases = append(leases, *lease)
 	}
 	return
 }

@@ -67,7 +67,7 @@ func (c *Coordinator) Stop() {
 }
 
 // Returns copy of the current held leases.
-func (c *Coordinator) GetLeases() []*Lease {
+func (c *Coordinator) GetLeases() []Lease {
 	return c.renewer.GetHeldLeases()
 }
 
