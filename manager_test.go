@@ -72,7 +72,8 @@ func (m *managerMock) TakeLease(*Lease) error {
 	return m.errOnly(methodTake)
 }
 
-func (m *managerMock) EvictLease(*Lease) error {
+func (m *managerMock) EvictLease(l *Lease) error {
+	l.Owner = "NULL"
 	return m.errOnly(methodEvict)
 }
 
