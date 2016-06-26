@@ -1,20 +1,5 @@
 package leases
 
-// Test cases:
-// 1. there are 2 workers(incloding me), two leases
-//    and I does not hold any lease. expect to stole 1
-// 2. there are 2 workers, 1 leases
-//    and I does not hold any lease. expect do nothing.
-// 3. threre are 2 workers, 3 leases, and there counter does not change.
-//    expect to evict and take them.
-// 3. threre are 2 workers, 3 leases, and all of them expired.
-//    expect to evict and take it
-// 4. threre are 3 workers(including me), 3 leases
-//    and I holding 1 lease. expect do nothing.
-// 5. there are 3 workers(including me), 3 leases
-//    and I does not any lease. expect to stole from the most loaded worker
-// 6
-
 import (
 	"testing"
 	"time"
@@ -66,7 +51,7 @@ var takerTestCases = []takerTest{
 		},
 	},
 	{
-		`threre are 2 workers, 3 leases, and all of them expired.
+		`2 workers, 3 leases, and all of them expired.
 		I does not hold any leases, and this is my first scanning.
 		expect to take two leases.`,
 		make(map[string]*Lease),
@@ -113,7 +98,7 @@ var takerTestCases = []takerTest{
 func TestTakerCases(t *testing.T) {
 	for _, test := range takerTestCases {
 		logger := logrus.New()
-		logger.Level = logrus.DebugLevel
+		logger.Level = logrus.PanicLevel
 		manager := newManagerMock(test.managerBehavior)
 		taker := &LeaseTaker{
 			Config: &Config{WorkerId: takerId,
