@@ -1,4 +1,4 @@
-package leases
+package lease
 
 import (
 	"testing"

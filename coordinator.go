@@ -1,4 +1,4 @@
-package leases
+package lease
 
 import "time"
 
@@ -20,8 +20,8 @@ type Coordinator struct {
 	done    chan struct{}
 }
 
-// New Coordinator with the given config.
-func NewCoordinator(config *Config) *Coordinator {
+// New create new Coordinator with the given config.
+func New(config *Config) *Coordinator {
 	config.defaults()
 	manager := &LeaseManager{config}
 	c := &Coordinator{
