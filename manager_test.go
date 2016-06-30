@@ -1,8 +1,26 @@
-package leases
+package lease
 
 import (
 	"errors"
 )
+
+// Test cases:
+// 1. create lease table
+//    - getting "already exists error"
+//    - getting error, should retry until maxCreateRetries
+//    - error = nil, should success
+// 2. listLeases
+//    - gettign error from db, should return an err
+//    - when success, test unmarshalig
+// 3. renewLease
+//    - while success, should increment the counter
+//    - while failed. should not increment the counter
+// 4. takeLease
+//    - while success. should set the owner and inrement the counter
+//    - when failed. should not
+// 5. evictLease
+//    - when success. should set the owner to NULL
+//    - when failed. should not.
 
 type (
 	method int
@@ -11,6 +29,8 @@ type (
 
 const (
 	methodCreate = iota
+	methodLCreate
+	methodDelete
 	methodRenew
 	methodEvict
 	methodTake
@@ -22,11 +42,13 @@ func (m method) String() string {
 }
 
 var methodNames = map[method]string{
-	methodCreate: "CreateLeaseTable",
-	methodRenew:  "RenewLease",
-	methodEvict:  "EvictLease",
-	methodTake:   "TakeLease",
-	methodList:   "ListLeases",
+	methodCreate:  "CreateLeaseTable",
+	methodLCreate: "CreateLease",
+	methodDelete:  "DeleteLease",
+	methodRenew:   "RenewLease",
+	methodEvict:   "EvictLease",
+	methodTake:    "TakeLease",
+	methodList:    "ListLeases",
 }
 
 type managerMock struct {
@@ -62,6 +84,10 @@ func (m *managerMock) errOnly(name method) (err error) {
 
 func (m *managerMock) CreateLeaseTable() error {
 	return m.errOnly(methodCreate)
+}
+
+func (m *managerMock) DeleteLease(*Lease) error {
+	return m.errOnly(methodDelete)
 }
 
 func (m *managerMock) RenewLease(*Lease) error {

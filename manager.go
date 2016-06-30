@@ -25,6 +25,7 @@ const (
 	maxScanRetries   = 3
 	maxCreateRetries = 3
 	maxUpdateRetries = 2
+	maxDeleteRetries = 2
 )
 
 // Manager wrap the basic operations for leases.
@@ -43,6 +44,12 @@ type Manager interface {
 
 	// Evict a lease
 	EvictLease(*Lease) error
+
+	// Delete a lease
+	DeleteLease(*Lease) error
+
+	// Create a lease
+	// CreateLease(*Lease) error
 }
 
 // LeaseManager is the default implemntation of Manager
@@ -166,8 +173,8 @@ func (l *LeaseManager) updateLease(updateLease, condLease Lease) (err error) {
 				LeaseCounterKey,
 			)),
 			ExpressionAttributeNames: map[string]*string{
-				"#counter": aws.String("leaseCounter"),
-				"#owner":   aws.String("leaseOwner"),
+				"#counter": aws.String(LeaseCounterKey),
+				"#owner":   aws.String(LeaseOwnerKey),
 			},
 			ConditionExpression: aws.String(":condCounter = #counter AND :condOwner = #owner"),
 		})
@@ -215,6 +222,50 @@ func (l *LeaseManager) ListLeases() (list []*Lease, err error) {
 			}
 		}
 		break
+	}
+	l.Backoff.Reset()
+	return
+}
+
+// Delete the given lease from DynamoDB. does nothing when passed a
+// lease that does not exist in DynamoDB.
+func (l *LeaseManager) DeleteLease(lease *Lease) (err error) {
+	for l.Backoff.Attempt() < maxDeleteRetries {
+		_, err = l.Client.DeleteItem(&dynamodb.DeleteItemInput{
+			TableName: aws.String(l.LeaseTable),
+			Key: map[string]*dynamodb.AttributeValue{
+				LeaseKeyKey: {
+					S: aws.String(lease.Key),
+				},
+			},
+			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+				":condOwner": {
+					S: aws.String(lease.Owner),
+				},
+				":condCounter": {
+					N: aws.String(strconv.Itoa(lease.Counter)),
+				},
+			},
+			ExpressionAttributeNames: map[string]*string{
+				"#counter": aws.String(LeaseCounterKey),
+				"#owner":   aws.String(LeaseOwnerKey),
+				"#key":     aws.String(LeaseKeyKey),
+			},
+			ConditionExpression: aws.String("attribute_not_exists(#key) OR :condCounter = #counter AND :condOwner = #owner"),
+		})
+
+		if err == nil {
+			break
+		}
+
+		backoff := l.Backoff.Duration()
+
+		l.Logger.WithFields(logrus.Fields{
+			"backoff": backoff,
+			"attempt": int(l.Backoff.Attempt()),
+		}).Warnf("Worker %s failed to delete lease", l.WorkerId)
+
+		time.Sleep(backoff)
 	}
 	l.Backoff.Reset()
 	return
