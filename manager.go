@@ -49,7 +49,7 @@ type Manager interface {
 	DeleteLease(*Lease) error
 
 	// Create a lease
-	// CreateLease(*Lease) error
+	CreateLease(*Lease) error
 }
 
 // LeaseManager is the default implemntation of Manager
@@ -144,40 +144,56 @@ func (l *LeaseManager) TakeLease(lease *Lease) (err error) {
 
 // UpdateLease gets a lease and update it in the leasing table.
 func (l *LeaseManager) updateLease(updateLease, condLease Lease) (err error) {
+	updateInput := &dynamodb.UpdateItemInput{
+		TableName: aws.String(l.LeaseTable),
+		Key: map[string]*dynamodb.AttributeValue{
+			LeaseKeyKey: {
+				S: aws.String(updateLease.Key),
+			},
+		},
+		ReturnValues: aws.String(dynamodb.ReturnValueAllNew),
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":owner": {
+				S: aws.String(updateLease.Owner),
+			},
+			":count": {
+				N: aws.String(strconv.Itoa(updateLease.Counter)),
+			},
+		},
+		UpdateExpression: aws.String(fmt.Sprintf(
+			"SET %s = :owner, %s = :count",
+			LeaseOwnerKey,
+			LeaseCounterKey,
+		)),
+	}
+
+	// add conditions only to veteran leases
+	var condExp string
+	var attrExp = make(map[string]*string)
+	if condLease.Counter > 0 {
+		updateInput.ExpressionAttributeValues[":condCounter"] = &dynamodb.AttributeValue{
+			N: aws.String(strconv.Itoa(condLease.Counter)),
+		}
+		attrExp["#counter"] = aws.String(LeaseCounterKey)
+		condExp = ":condCounter = #counter"
+	}
+	if condLease.Owner != "" {
+		updateInput.ExpressionAttributeValues[":condOwner"] = &dynamodb.AttributeValue{
+			S: aws.String(condLease.Owner),
+		}
+		attrExp["#owner"] = aws.String(LeaseOwnerKey)
+		if condExp != "" {
+			condExp += " AND "
+		}
+		condExp += ":condOwner = #owner"
+	}
+	if condExp != "" {
+		updateInput.ExpressionAttributeNames = attrExp
+		updateInput.ConditionExpression = aws.String(condExp)
+	}
+
 	for l.Backoff.Attempt() < maxUpdateRetries {
-		_, err = l.Client.UpdateItem(&dynamodb.UpdateItemInput{
-			TableName: aws.String(l.LeaseTable),
-			Key: map[string]*dynamodb.AttributeValue{
-				LeaseKeyKey: {
-					S: aws.String(updateLease.Key),
-				},
-			},
-			ReturnValues: aws.String(dynamodb.ReturnValueAllNew),
-			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-				":owner": {
-					S: aws.String(updateLease.Owner),
-				},
-				":count": {
-					N: aws.String(strconv.Itoa(updateLease.Counter)),
-				},
-				":condOwner": {
-					S: aws.String(condLease.Owner),
-				},
-				":condCounter": {
-					N: aws.String(strconv.Itoa(condLease.Counter)),
-				},
-			},
-			UpdateExpression: aws.String(fmt.Sprintf(
-				"SET %s = :owner, %s = :count",
-				LeaseOwnerKey,
-				LeaseCounterKey,
-			)),
-			ExpressionAttributeNames: map[string]*string{
-				"#counter": aws.String(LeaseCounterKey),
-				"#owner":   aws.String(LeaseOwnerKey),
-			},
-			ConditionExpression: aws.String(":condCounter = #counter AND :condOwner = #owner"),
-		})
+		_, err = l.Client.UpdateItem(updateInput)
 
 		if err == nil {
 			break
@@ -192,6 +208,7 @@ func (l *LeaseManager) updateLease(updateLease, condLease Lease) (err error) {
 
 		time.Sleep(backoff)
 	}
+
 	l.Backoff.Reset()
 	return
 }
@@ -269,4 +286,21 @@ func (l *LeaseManager) DeleteLease(lease *Lease) (err error) {
 	}
 	l.Backoff.Reset()
 	return
+}
+
+func (l *LeaseManager) CreateLease(lease *Lease) (err error) {
+	_, err = l.Client.PutItem(&dynamodb.PutItemInput{
+		TableName: aws.String(l.LeaseTable),
+		Item: map[string]*dynamodb.AttributeValue{
+			LeaseKeyKey: {
+				S: aws.String(lease.Key),
+			},
+		},
+		/*ExpressionAttributeNames: map[string]*string{
+			"#key": aws.String(LeaseKeyKey),
+		},
+		ConditionExpression: aws.String("attribute_not_exists(#key)"),*/
+	})
+	l.Logger.Info(err)
+	return err
 }
