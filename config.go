@@ -15,7 +15,9 @@ import (
 // Clientface is a thin methods set of DynamoDB.
 type Clientface interface {
 	Scan(*dynamodb.ScanInput) (*dynamodb.ScanOutput, error)
+	PutItem(*dynamodb.PutItemInput) (*dynamodb.PutItemOutput, error)
 	UpdateItem(*dynamodb.UpdateItemInput) (*dynamodb.UpdateItemOutput, error)
+	DeleteItem(*dynamodb.DeleteItemInput) (*dynamodb.DeleteItemOutput, error)
 	CreateTable(*dynamodb.CreateTableInput) (*dynamodb.CreateTableOutput, error)
 }
 
@@ -101,7 +103,7 @@ func (c *Config) defaults() {
 	}
 
 	if c.ExpireAfter == 0 {
-		c.ExpireAfter = time.Minute * 5
+		c.ExpireAfter = time.Minute
 	}
 	if c.ExpireAfter < time.Minute {
 		c.Logger.Fatal("ExpireAfter must be greater or equal to 1m")
