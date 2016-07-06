@@ -33,6 +33,6 @@ func (l *Lease) hasNoOwner() bool {
 // Leaser is the interface that wraps the Coordinator.GetLeases method.
 type Leaser interface {
 	Delete(Lease) error
-	Create(Lease) error
+	Create(Lease) (Lease, error)
 	GetLeases() []Lease
 }
