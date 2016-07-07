@@ -19,7 +19,8 @@ const (
 	LeaseCounterKey = "leaseCounter"
 
 	// AWS exception
-	AlreadyExist = "ResourceInUseException"
+	AlreadyExist      = "ResourceInUseException"
+	ConditionalFailed = "ConditionalCheckFailedException"
 
 	// Max number of retries
 	maxScanRetries   = 3
@@ -49,7 +50,7 @@ type Manager interface {
 	DeleteLease(*Lease) error
 
 	// Create a lease
-	CreateLease(*Lease) error
+	CreateLease(*Lease) (*Lease, error)
 }
 
 // LeaseManager is the default implemntation of Manager
@@ -268,10 +269,14 @@ func (l *LeaseManager) DeleteLease(lease *Lease) (err error) {
 				"#owner":   aws.String(LeaseOwnerKey),
 				"#key":     aws.String(LeaseKeyKey),
 			},
-			ConditionExpression: aws.String("attribute_not_exists(#key) OR :condCounter = #counter AND :condOwner = #owner"),
+			ConditionExpression: aws.String("attribute_not_exists(#key) OR #counter = :condCounter AND #owner = :condOwner"),
 		})
 
 		if err == nil {
+			break
+		}
+
+		if awsErr, ok := err.(awserr.RequestFailure); ok && awsErr.Code() == ConditionalFailed {
 			break
 		}
 
@@ -288,19 +293,64 @@ func (l *LeaseManager) DeleteLease(lease *Lease) (err error) {
 	return
 }
 
-func (l *LeaseManager) CreateLease(lease *Lease) (err error) {
-	_, err = l.Client.PutItem(&dynamodb.PutItemInput{
-		TableName: aws.String(l.LeaseTable),
-		Item: map[string]*dynamodb.AttributeValue{
-			LeaseKeyKey: {
-				S: aws.String(lease.Key),
+// Create a new lease. conditional on a lease not already existing with different
+// owner and counter.
+func (l *LeaseManager) CreateLease(lease *Lease) (*Lease, error) {
+	if lease.Owner == "" {
+		lease.Owner = l.WorkerId
+	}
+	if lease.Counter == 0 {
+		lease.Counter++
+	}
+	var err error
+	for l.Backoff.Attempt() < maxCreateRetries {
+		_, err = l.Client.PutItem(&dynamodb.PutItemInput{
+			TableName: aws.String(l.LeaseTable),
+			Item: map[string]*dynamodb.AttributeValue{
+				LeaseKeyKey: {
+					S: aws.String(lease.Key),
+				},
+				LeaseOwnerKey: {
+					S: aws.String(lease.Owner),
+				},
+				LeaseCounterKey: {
+					N: aws.String(strconv.Itoa(lease.Counter)),
+				},
 			},
-		},
-		/*ExpressionAttributeNames: map[string]*string{
-			"#key": aws.String(LeaseKeyKey),
-		},
-		ConditionExpression: aws.String("attribute_not_exists(#key)"),*/
-	})
-	l.Logger.Info(err)
-	return err
+			ReturnValues: aws.String(dynamodb.ReturnValueAllOld),
+			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+				":condOwner": {
+					S: aws.String(lease.Owner),
+				},
+				":condCounter": {
+					N: aws.String(strconv.Itoa(lease.Counter)),
+				},
+			},
+			ExpressionAttributeNames: map[string]*string{
+				"#counter": aws.String(LeaseCounterKey),
+				"#owner":   aws.String(LeaseOwnerKey),
+				"#key":     aws.String(LeaseKeyKey),
+			},
+			ConditionExpression: aws.String("attribute_not_exists(#key) OR #counter = :condCounter AND #owner = :condOwner"),
+		})
+
+		if err == nil {
+			break
+		}
+
+		if awsErr, ok := err.(awserr.RequestFailure); ok && awsErr.Code() == ConditionalFailed {
+			break
+		}
+
+		backoff := l.Backoff.Duration()
+
+		l.Logger.WithFields(logrus.Fields{
+			"backoff": backoff,
+			"attempt": int(l.Backoff.Attempt()),
+		}).Warnf("Worker %s failed to create lease", l.WorkerId)
+
+		time.Sleep(backoff)
+	}
+	l.Backoff.Reset()
+	return lease, err
 }
