@@ -110,8 +110,8 @@ func (c *Config) defaults() {
 	if c.ExpireAfter == 0 {
 		c.ExpireAfter = time.Second * 10
 	}
-	if c.ExpireAfter < time.Minute {
-		c.Logger.Fatal("ExpireAfter must be greater or equal to 1m")
+	if c.ExpireAfter < time.Second*10 {
+		c.Logger.Fatal("ExpireAfter must be greater or equal to 10s")
 	}
 
 	if c.MaxLeasesToStealAtOneTime == 0 {
