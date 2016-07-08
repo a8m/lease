@@ -71,6 +71,22 @@ func (c *Coordinator) GetLeases() []Lease {
 	return c.renewer.GetHeldLeases()
 }
 
+// Delete the given lease from DB. does nothing when passed
+// a lease that does not exist in the DB.
+func (c *Coordinator) Delete(l Lease) error {
+	return c.manager.DeleteLease(&l)
+}
+
+// Create a new lease. conditional on a lease not already existing with different
+// owner and counter.
+func (c *Coordinator) Create(l Lease) (Lease, error) {
+	lease, err := c.manager.CreateLease(&l)
+	if err != nil {
+		return l, err
+	}
+	return *lease, nil
+}
+
 // loop run forever and upadte leases periodically.
 func (c *Coordinator) loop() {
 	defer close(c.done)
