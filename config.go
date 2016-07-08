@@ -63,7 +63,7 @@ type Config struct {
 	// ExpireAfter indicate how long lease unit can live without renovation
 	// before expiration.
 	// A worker which does not renew it's lease, will be regarded as having problems
-	// and it's shards will be assigned to other workers. defaults to 5m.
+	// and it's shards will be assigned to other workers. defaults to 10s.
 	ExpireAfter time.Duration
 
 	// Max leases to steal from another worker at one time (for load balancing).
@@ -78,6 +78,9 @@ type Config struct {
 	// The Amazon DynamoDB table used for tracking leases will be provisioned with this write capacity.
 	// Defaults to 10.
 	LeaseTableWriteCap int
+
+	// Allow for some variance when calculating lease expirations. set to 25ms.
+	epsilonMills time.Duration
 }
 
 // defaults for configuration.
@@ -102,8 +105,10 @@ func (c *Config) defaults() {
 		c.Logger.Fatal("LeaseTable is required field")
 	}
 
+	c.epsilonMills = time.Millisecond * 25
+
 	if c.ExpireAfter == 0 {
-		c.ExpireAfter = time.Minute
+		c.ExpireAfter = time.Second * 10
 	}
 	if c.ExpireAfter < time.Minute {
 		c.Logger.Fatal("ExpireAfter must be greater or equal to 1m")

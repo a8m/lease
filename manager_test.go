@@ -90,6 +90,10 @@ func (m *managerMock) DeleteLease(*Lease) error {
 	return m.errOnly(methodDelete)
 }
 
+func (m *managerMock) CreateLease(l *Lease) (*Lease, error) {
+	return l, m.errOnly(methodLCreate)
+}
+
 func (m *managerMock) RenewLease(*Lease) error {
 	return m.errOnly(methodRenew)
 }
