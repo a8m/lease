@@ -8,17 +8,16 @@ import "time"
 type Coordinator struct {
 	*Config
 
-	// Tick called inside the loop method and it resposible to
-	// set the "break" between iterations.
-	// for example: in our test cases, we don't want to sleep.
-	Tick func() <-chan time.Time
-
 	// coordinator state
-	manager Manager
-	renewer Renewer
-	taker   Taker
-	done    chan struct{}
+	manager    Manager
+	renewer    Renewer
+	taker      Taker
+	stopTaker  chan struct{}
+	stopRenwer chan struct{}
 }
+
+// Taker or Renewer loop function
+type loopFunc func() error
 
 // New create new Coordinator with the given config.
 func New(config *Config) *Coordinator {
@@ -37,9 +36,7 @@ func New(config *Config) *Coordinator {
 			manager:   manager,
 			allLeases: make(map[string]*Lease),
 		},
-		done: make(chan struct{}),
 	}
-	c.Tick = defaultTick(c)
 	return c
 }
 
@@ -49,7 +46,21 @@ func (c *Coordinator) Start() error {
 	if err := c.manager.CreateLeaseTable(); err != nil {
 		return err
 	}
-	go c.loop()
+
+	takerIntervalMills := (c.ExpireAfter + c.epsilonMills) * 2
+	renewerIntervalMills := c.ExpireAfter/3 - c.epsilonMills
+
+	c.stopTaker = c.loop(c.taker.Take, takerIntervalMills, "take leases")
+	c.stopRenwer = c.loop(c.renewer.Renew, renewerIntervalMills, "renew leases")
+
+	c.Logger.Infof("Start coordinator with failover time %s, and epsilon %s. "+
+		"LeaseCoordinator will renew leases every %s, take leases every %s "+
+		"and steal %d lease(s) at a time.",
+		c.ExpireAfter,
+		c.epsilonMills,
+		renewerIntervalMills,
+		takerIntervalMills,
+		c.MaxLeasesToStealAtOneTime)
 	return nil
 }
 
@@ -57,11 +68,17 @@ func (c *Coordinator) Start() error {
 func (c *Coordinator) Stop() {
 	c.Logger.Info("stopping coordinator")
 
-	// notify loop
-	c.done <- struct{}{}
+	// stop taker loop
+	c.stopTaker <- struct{}{}
 
-	// wait
-	<-c.done
+	// wait for close
+	<-c.stopTaker
+
+	// stop renewer loop
+	c.stopRenwer <- struct{}{}
+
+	// wait for close
+	<-c.stopRenwer
 
 	c.Logger.Info("stopped coordinator")
 }
@@ -87,38 +104,41 @@ func (c *Coordinator) Create(l Lease) (Lease, error) {
 	return *lease, nil
 }
 
-// loop run forever and upadte leases periodically.
-func (c *Coordinator) loop() {
-	defer close(c.done)
-	for {
-		select {
-		case <-c.Tick():
-			// Take(or steal leases)
-			if err := c.taker.Take(); err != nil {
-				c.Logger.WithError(err).Infof("Worker %s failed to take leases", c.WorkerId)
+// loop spawn a goroutine and returns a "done" channel related to this goroutine.
+// the interval used to create a ticker to run the given loopFunc each x time and
+// the reason string used for logging.
+func (c *Coordinator) loop(fn loopFunc, interval time.Duration, reason string) chan struct{} {
+	done := make(chan struct{})
+	go func() {
+		ticker := c.ticker(interval)
+		defer close(done)
+
+		for {
+			select {
+			// taker or renew old leases
+			case <-ticker():
+				if err := fn(); err != nil {
+					c.Logger.WithError(err).Errorf("Worker %s failed to %s", c.WorkerId, reason)
+				}
+			// someone called stop and we need to exit.
+			case <-done:
+				return
 			}
-			// Renew old leases
-			if err := c.renewer.Renew(); err != nil {
-				c.Logger.WithError(err).Infof("Worker %s failed to renew its leases", c.WorkerId)
-			}
-		// or someone called stop and we need to exit.
-		case <-c.done:
-			return
 		}
-	}
+	}()
+
+	return done
 }
 
-// default tick function.
-// used inside the loop method to set the "break" between iterations
-func defaultTick(c *Coordinator) func() <-chan time.Time {
+// ticker returns time.Time channel that called with zero value in the first call.
+// used to start 'taking'(or 'renewing') leases immediately.
+func (c *Coordinator) ticker(d time.Duration) func() <-chan time.Time {
 	firstTime := true
 	return func() <-chan time.Time {
-		var sleepTime time.Duration
+		sleepTime := d
 		if firstTime {
 			firstTime = false
-		} else {
-			sleepTime = time.Duration(c.ExpireAfter.Nanoseconds() / 3)
-			c.Logger.Infof("Worker %s sleep for: %s", c.WorkerId, sleepTime)
+			sleepTime = 0
 		}
 		return time.After(sleepTime)
 	}
