@@ -3,6 +3,7 @@ package lease
 import (
 	"crypto/rand"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -21,8 +22,8 @@ type Clientface interface {
 	CreateTable(*dynamodb.CreateTableInput) (*dynamodb.CreateTableOutput, error)
 }
 
-// Backoff is interface to hold Backoff strategy
-type Backoff interface {
+// Backofface is interface that holds the backoff strategy
+type Backofface interface {
 	Reset()
 	Attempt() float64
 	Duration() time.Duration
@@ -50,9 +51,9 @@ type Config struct {
 	Logger Logger
 
 	// Backoff determines the backoff strategy for http failures.
-	// Defaults to backoff.Backoff with min value of time.Second and jitter
+	// Defaults to lease.Backoff with min value of time.Second and jitter
 	// set to true.
-	Backoff Backoff
+	Backoff Backofface
 
 	// The Amazon DynamoDB table name used for tracking leases.
 	LeaseTable string
@@ -95,10 +96,11 @@ func (c *Config) defaults() {
 	}
 
 	if c.Backoff == nil {
-		c.Backoff = &backoff.Backoff{
-			Min:    time.Second,
-			Jitter: true,
-		}
+		c.Backoff = &Backoff{
+			b: &backoff.Backoff{
+				Min:    time.Second,
+				Jitter: true,
+			}}
 	}
 
 	if c.LeaseTable == "" {
@@ -151,4 +153,28 @@ func uuid() (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%x-%x-%x-%x-%x", b[0:4], b[4:6], b[6:8], b[8:10], b[10:]), nil
+}
+
+// Backoff is the default thread-safe implemtation for Backofface
+type Backoff struct {
+	sync.Mutex
+	b *backoff.Backoff
+}
+
+func (b *Backoff) Duration() time.Duration {
+	b.Lock()
+	defer b.Unlock()
+	return b.b.Duration()
+}
+
+func (b *Backoff) Attempt() float64 {
+	b.Lock()
+	defer b.Unlock()
+	return b.b.Attempt()
+}
+
+func (b *Backoff) Reset() {
+	b.Lock()
+	b.b.Reset()
+	b.Unlock()
 }
