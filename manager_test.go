@@ -6,19 +6,12 @@ import (
 	"testing"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
 	"github.com/jpillora/backoff"
 )
 
-// Test cases:
-// 1. create lease table
-//    - getting "already exists error"
-//    - getting error, should retry until maxCreateRetries
-//    - error = nil, should success
-// 2. listLeases
-//    - gettign error from db, should return an err
-//    - when success, test unmarshalig
 // 3. renewLease
 //    - while success, should increment the counter
 //    - while failed. should not increment the counter
@@ -36,7 +29,7 @@ func TestCreateTable(t *testing.T) {
 			awserr.New("ResourceInUseException", "", errors.New("")),
 			// getting error, should retry until maxCreateRetries
 			nil, nil, nil,
-			// error = nil, should success
+			// create table finished successfully
 			new(dynamodb.CreateTableOutput),
 		},
 	})
@@ -48,11 +41,46 @@ func TestCreateTable(t *testing.T) {
 
 	err = manager.CreateLeaseTable()
 	assert(t, client.calls[methodCreateTable] == 4, "should retry 4 times")
-	assert(t, err != nil, "expecting to return the error")
+	assert(t, err != nil, "expect to returns the error")
 
 	err = manager.CreateLeaseTable()
 	assert(t, err == nil, "expecting not to fail when the request success")
 	assert(t, client.calls[methodCreateTable] == 5, "number of calls should be 5")
+}
+
+func TestListLeases(t *testing.T) {
+	// 2. listLeases
+	//    - gettign error from db, should return an err
+	//    - when success, test unmarshalig
+	client := newClientMock(map[method]args{
+		methodScan: {
+			// getting error from dynamodb
+			nil, nil, nil,
+			// scan table finished successfully
+			&dynamodb.ScanOutput{
+				Items: []map[string]*dynamodb.AttributeValue{
+					{"leaseKey": {S: aws.String("foo")}},
+					{"leaseKey": {S: aws.String("bar")}},
+					{"leaseKey": {S: aws.String("baz")}},
+				},
+			},
+		},
+	})
+	manager := newTestManager(client)
+
+	leases, err := manager.ListLeases()
+	assert(t, err != nil, "expect to returns the error")
+	assert(t, client.calls[methodScan] == 3, "number of calls should be 3")
+
+	leases, err = manager.ListLeases()
+	assert(t, err == nil, "expecting not to fail when the request success")
+	assert(t, client.calls[methodScan] == 4, "number of calls should be 4")
+
+	expectedLeases := []string{"foo", "bar", "baz"}
+	for i := range leases {
+		k1, k2 := leases[i].Key, expectedLeases[i]
+		assert(t, k1 == k2, fmt.Sprintf("expect %s to equal %s", k1, k1))
+	}
 }
 
 type (
