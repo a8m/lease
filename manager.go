@@ -87,7 +87,7 @@ func (l *LeaseManager) CreateLeaseTable() (err error) {
 			break
 		}
 
-		if awsErr, ok := err.(awserr.RequestFailure); ok && awsErr.Code() == AlreadyExist {
+		if awsErr, ok := err.(awserr.Error); ok && awsErr.Code() == AlreadyExist {
 			err = nil
 			break
 		}
@@ -276,7 +276,7 @@ func (l *LeaseManager) DeleteLease(lease *Lease) (err error) {
 			break
 		}
 
-		if awsErr, ok := err.(awserr.RequestFailure); ok && awsErr.Code() == ConditionalFailed {
+		if awsErr, ok := err.(awserr.Error); ok && awsErr.Code() == ConditionalFailed {
 			break
 		}
 
@@ -338,7 +338,7 @@ func (l *LeaseManager) CreateLease(lease *Lease) (*Lease, error) {
 			break
 		}
 
-		if awsErr, ok := err.(awserr.RequestFailure); ok && awsErr.Code() == ConditionalFailed {
+		if awsErr, ok := err.(awserr.Error); ok && awsErr.Code() == ConditionalFailed {
 			break
 		}
 

@@ -12,9 +12,6 @@ import (
 	"github.com/jpillora/backoff"
 )
 
-// 3. renewLease
-//    - while success, should increment the counter
-//    - while failed. should not increment the counter
 // 4. takeLease
 //    - while success. should set the owner and inrement the counter
 //    - when failed. should not
@@ -49,9 +46,6 @@ func TestCreateTable(t *testing.T) {
 }
 
 func TestListLeases(t *testing.T) {
-	// 2. listLeases
-	//    - gettign error from db, should return an err
-	//    - when success, test unmarshalig
 	client := newClientMock(map[method]args{
 		methodScan: {
 			// getting error from dynamodb
@@ -81,6 +75,73 @@ func TestListLeases(t *testing.T) {
 		k1, k2 := leases[i].Key, expectedLeases[i]
 		assert(t, k1 == k2, fmt.Sprintf("expect %s to equal %s", k1, k1))
 	}
+}
+
+func TestRenewLease(t *testing.T) {
+	client := newClientMock(map[method]args{
+		methodUpdateItem: {
+			// update item finsihed successfully
+			new(dynamodb.UpdateItemOutput),
+			// getting error from dynamodb
+			nil, nil,
+		},
+	})
+	manager := newTestManager(client)
+
+	leaseToRenew := &Lease{Key: "foo", Counter: 10, Owner: "o1"}
+	err := manager.RenewLease(leaseToRenew)
+	assert(t, err == nil, "expecting not to fail")
+	assert(t, leaseToRenew.Counter == 11, "expect leaseCounter to be 11")
+
+	err = manager.RenewLease(leaseToRenew)
+	assert(t, err != nil, "expect to returns the error")
+	assert(t, leaseToRenew.Counter == 11, "expect leaseCounter to be 11")
+	assert(t, client.calls[methodUpdateItem] == 3, "number of calls should be 3")
+}
+
+func TestEvictLease(t *testing.T) {
+	client := newClientMock(map[method]args{
+		methodUpdateItem: {
+			// getting error from dynamodb
+			nil, nil,
+			// update item finsihed successfully
+			new(dynamodb.UpdateItemOutput),
+		},
+	})
+	manager := newTestManager(client)
+
+	leaseToEvict := &Lease{Key: "foo", Counter: 10, Owner: "o1"}
+	err := manager.EvictLease(leaseToEvict)
+	assert(t, err != nil, "expect to returns the error")
+	assert(t, leaseToEvict.Owner == "o1", "expect leaseOwner to be the same")
+	assert(t, client.calls[methodUpdateItem] == 2, "number of calls should be 2")
+
+	err = manager.EvictLease(leaseToEvict)
+	assert(t, err == nil, "expecting not to fail")
+	assert(t, leaseToEvict.Counter == 10, "expect leaseCounter to be the same")
+	assert(t, leaseToEvict.Owner == "NULL", "expect leaseOwner to be the 'NULL'")
+}
+
+func TestTakeLease(t *testing.T) {
+	client := newClientMock(map[method]args{
+		methodUpdateItem: {
+			// getting error from dynamodb
+			nil, nil,
+			// update item finsihed successfully
+			new(dynamodb.UpdateItemOutput),
+		},
+	})
+	manager := newTestManager(client)
+
+	leaseToTake := &Lease{Key: "foo", Counter: 10, Owner: "o1"}
+	err := manager.TakeLease(leaseToTake)
+	assert(t, err != nil, "expect to returns the error")
+	assert(t, leaseToTake.Owner == "o1" && leaseToTake.Counter == 10, "expect leaseOwner and leaseCounter to be the same")
+
+	err = manager.TakeLease(leaseToTake)
+	assert(t, err == nil, "expecting not to fail")
+	assert(t, leaseToTake.Owner == manager.WorkerId, "expecting owner to equal workerId")
+	assert(t, leaseToTake.Counter == 11, "expecting counter to be increment by 1")
 }
 
 type (
