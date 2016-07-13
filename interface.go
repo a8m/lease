@@ -1,8 +1,6 @@
 package lease
 
-import (
-	"time"
-)
+import "time"
 
 // Lease type contains data pertianing to a Lease.
 // Distributed systems may use leases to partition work across a fleet of workers.
@@ -12,8 +10,7 @@ import (
 // or until it fails.
 // When the worker stops holding the lease, another worker will take and hold the lease.
 type Lease struct {
-	Key string `dynamodbav:"leaseKey"`
-	// TODO: private fields
+	Key     string `dynamodbav:"leaseKey"`
 	Owner   string `dynamodbav:"leaseOwner"`
 	Counter int    `dynamodbav:"leaseCounter"`
 
@@ -30,9 +27,11 @@ func (l *Lease) hasNoOwner() bool {
 	return l.Owner == "NULL" || l.Owner == ""
 }
 
-// Leaser is the interface that wraps the Coordinator.GetLeases method.
+// Leaser is the interface that wraps the Coordinator methods.
 type Leaser interface {
+	Stop()
+	Start() error
+	GetLeases() []Lease
 	Delete(Lease) error
 	Create(Lease) (Lease, error)
-	GetLeases() []Lease
 }
