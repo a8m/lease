@@ -160,6 +160,34 @@ func TestDeleteLease(t *testing.T) {
 	assert(t, client.calls[methodDeleteItem] == 2, "expect number of calls to equal 2")
 }
 
+func TestCreateLease(t *testing.T) {
+	client := newClientMock(map[method]args{
+		methodPutItem: {
+			// delete item finished successfully
+			new(dynamodb.PutItemOutput),
+			// getting "conditional error"
+			awserr.New("ConditionalCheckFailedException", "", errors.New("")),
+			// getting error from dynamodb
+			nil, nil, nil,
+		},
+	})
+	manager := newTestManager(client)
+
+	leaseToCreate := &Lease{Key: "bar"}
+	lease, err := manager.CreateLease(leaseToCreate)
+	assert(t, err == nil, "expect CreateLease not to fail")
+	assert(t, client.calls[methodPutItem] == 1, "expect number of calls to equal 1")
+	assert(t, lease.Owner == manager.WorkerId && lease.Counter == 1, "expect taking the lease")
+
+	_, err = manager.CreateLease(leaseToCreate)
+	assert(t, err != nil, "expect CreateLease to fail")
+	assert(t, client.calls[methodPutItem] == 2, "expect not retry on conditional failure")
+
+	_, err = manager.CreateLease(leaseToCreate)
+	assert(t, err != nil, "expect CreateLease to fail")
+	assert(t, client.calls[methodPutItem] == 5, "expect CreateLease to retry 3 times")
+}
+
 type (
 	method int
 	args   []interface{}
