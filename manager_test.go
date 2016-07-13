@@ -12,13 +12,6 @@ import (
 	"github.com/jpillora/backoff"
 )
 
-// 4. takeLease
-//    - while success. should set the owner and inrement the counter
-//    - when failed. should not
-// 5. evictLease
-//    - when success. should set the owner to NULL
-//    - when failed. should not.
-
 func TestCreateTable(t *testing.T) {
 	client := newClientMock(map[method]args{
 		methodCreateTable: {
@@ -33,7 +26,7 @@ func TestCreateTable(t *testing.T) {
 	manager := newTestManager(client)
 
 	err := manager.CreateLeaseTable()
-	assert(t, err == nil, "expecting not to fail while getting 'table already exist' error")
+	assert(t, err == nil, "expect not to fail while getting 'table already exist' error")
 	assert(t, client.calls[methodCreateTable] == 1, "number of calls should be 1")
 
 	err = manager.CreateLeaseTable()
@@ -41,7 +34,7 @@ func TestCreateTable(t *testing.T) {
 	assert(t, err != nil, "expect to returns the error")
 
 	err = manager.CreateLeaseTable()
-	assert(t, err == nil, "expecting not to fail when the request success")
+	assert(t, err == nil, "expect not to fail when the request success")
 	assert(t, client.calls[methodCreateTable] == 5, "number of calls should be 5")
 }
 
@@ -67,7 +60,7 @@ func TestListLeases(t *testing.T) {
 	assert(t, client.calls[methodScan] == 3, "number of calls should be 3")
 
 	leases, err = manager.ListLeases()
-	assert(t, err == nil, "expecting not to fail when the request success")
+	assert(t, err == nil, "expect not to fail when the request success")
 	assert(t, client.calls[methodScan] == 4, "number of calls should be 4")
 
 	expectedLeases := []string{"foo", "bar", "baz"}
@@ -90,7 +83,7 @@ func TestRenewLease(t *testing.T) {
 
 	leaseToRenew := &Lease{Key: "foo", Counter: 10, Owner: "o1"}
 	err := manager.RenewLease(leaseToRenew)
-	assert(t, err == nil, "expecting not to fail")
+	assert(t, err == nil, "expect not to fail")
 	assert(t, leaseToRenew.Counter == 11, "expect leaseCounter to be 11")
 
 	err = manager.RenewLease(leaseToRenew)
@@ -117,7 +110,7 @@ func TestEvictLease(t *testing.T) {
 	assert(t, client.calls[methodUpdateItem] == 2, "number of calls should be 2")
 
 	err = manager.EvictLease(leaseToEvict)
-	assert(t, err == nil, "expecting not to fail")
+	assert(t, err == nil, "expect not to fail")
 	assert(t, leaseToEvict.Counter == 10, "expect leaseCounter to be the same")
 	assert(t, leaseToEvict.Owner == "NULL", "expect leaseOwner to be the 'NULL'")
 }
@@ -139,9 +132,32 @@ func TestTakeLease(t *testing.T) {
 	assert(t, leaseToTake.Owner == "o1" && leaseToTake.Counter == 10, "expect leaseOwner and leaseCounter to be the same")
 
 	err = manager.TakeLease(leaseToTake)
-	assert(t, err == nil, "expecting not to fail")
-	assert(t, leaseToTake.Owner == manager.WorkerId, "expecting owner to equal workerId")
-	assert(t, leaseToTake.Counter == 11, "expecting counter to be increment by 1")
+	assert(t, err == nil, "expect not to fail")
+	assert(t, leaseToTake.Owner == manager.WorkerId, "expect owner to equal workerId")
+	assert(t, leaseToTake.Counter == 11, "expect counter to be increment by 1")
+}
+
+func TestDeleteLease(t *testing.T) {
+	client := newClientMock(map[method]args{
+		methodDeleteItem: {
+			// delete item finished successfully
+			new(dynamodb.DeleteItemOutput),
+			// getting "conditional error"
+			awserr.New("ConditionalCheckFailedException", "", errors.New("")),
+			// getting error from dynamodb
+			nil, nil,
+		},
+	})
+	manager := newTestManager(client)
+
+	leaseToDelete := &Lease{Key: "foo"}
+	err := manager.DeleteLease(leaseToDelete)
+	assert(t, err == nil, "expect not to fail")
+	assert(t, client.calls[methodDeleteItem] == 1, "expect number of calls to equal 1")
+
+	err = manager.DeleteLease(leaseToDelete)
+	assert(t, err != nil, "expect returns the conditional error")
+	assert(t, client.calls[methodDeleteItem] == 2, "expect number of calls to equal 2")
 }
 
 type (
@@ -230,7 +246,7 @@ func (c *clientMock) PutItem(*dynamodb.PutItemInput) (*dynamodb.PutItemOutput, e
 			return out, nil
 		}
 		// allows custom errors. for example: 'ConditionalFailed'
-		err, ok := result.(awserr.RequestFailure)
+		err, ok := result.(awserr.Error)
 		return nil, err
 	}
 	return nil, errors.New("put item failed")
@@ -245,7 +261,7 @@ func (c *clientMock) UpdateItem(*dynamodb.UpdateItemInput) (*dynamodb.UpdateItem
 			return out, nil
 		}
 		// allows custom errors. for example: 'ConditionalFailed'
-		err, ok := result.(awserr.RequestFailure)
+		err, ok := result.(awserr.Error)
 		return nil, err
 	}
 	return nil, errors.New("update item failed")
@@ -260,7 +276,7 @@ func (c *clientMock) DeleteItem(*dynamodb.DeleteItemInput) (*dynamodb.DeleteItem
 			return out, nil
 		}
 		// allows custom errors. for example: 'ConditionalFailed'
-		err, ok := result.(awserr.RequestFailure)
+		err, ok := result.(awserr.Error)
 		return nil, err
 	}
 	return nil, errors.New("delete item failed")
@@ -275,7 +291,7 @@ func (c *clientMock) CreateTable(*dynamodb.CreateTableInput) (*dynamodb.CreateTa
 			return out, nil
 		}
 		// allows custom errors. for example: 'ConditionalFailed'
-		err, ok := result.(awserr.RequestFailure)
+		err, ok := result.(awserr.Error)
 		return nil, err
 	}
 	return nil, errors.New("create table failed")
