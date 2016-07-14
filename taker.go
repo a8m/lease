@@ -72,7 +72,7 @@ func (l *LeaseTaker) Take() error {
 
 	for _, lease := range leasesToTake {
 		if err := l.manager.TakeLease(lease); err != nil {
-			l.Logger.Debugf("Worker %s could not take lease with key %s.",
+			l.Logger.WithError(err).Debugf("Worker %s could not take lease with key %s.",
 				l.WorkerId,
 				lease.Key)
 		} else {
@@ -163,8 +163,13 @@ func (l *LeaseTaker) updateLeases(list []*Lease) {
 				allLeases[oldLease.Key] = newLease
 			} else {
 				if oldLease.isExpired(l.ExpireAfter) {
+					// in some cases that "other" worker evict this lease
+					// and set his owner to NULL
+					oldLease.Owner = newLease.Owner
 					if err := l.manager.EvictLease(oldLease); err != nil {
-						l.Logger.WithError(err).Warnf("Worker %s failed to evict lease", l.WorkerId)
+						l.Logger.WithError(err).Warnf("Worker %s failed to evict lease with key %s",
+							l.WorkerId,
+							newLease.Key)
 					}
 				}
 				allLeases[oldLease.Key] = oldLease
