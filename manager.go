@@ -200,6 +200,10 @@ func (l *LeaseManager) updateLease(updateLease, condLease Lease) (err error) {
 			break
 		}
 
+		if awsErr, ok := err.(awserr.Error); ok && awsErr.Code() == ConditionalFailed {
+			break
+		}
+
 		backoff := l.Backoff.Duration()
 
 		l.Logger.WithFields(logrus.Fields{
