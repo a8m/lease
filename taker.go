@@ -163,9 +163,8 @@ func (l *LeaseTaker) updateLeases(list []*Lease) {
 				allLeases[oldLease.Key] = newLease
 			} else {
 				if oldLease.isExpired(l.ExpireAfter) {
-					err := l.manager.EvictLease(oldLease)
-					if err != nil {
-						l.Logger.Error(err)
+					if err := l.manager.EvictLease(oldLease); err != nil {
+						l.Logger.WithError(err).Warnf("Worker %s failed to evict lease", l.WorkerId)
 					}
 				}
 				allLeases[oldLease.Key] = oldLease
