@@ -26,7 +26,7 @@ func main() {
 		LeaseTable: "lease-table-test",
 	})
 
-	// start to take leases
+	// start taking leases
 	err := leaser.Start()
 
 	if err != nil {
