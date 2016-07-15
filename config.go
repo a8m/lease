@@ -22,7 +22,7 @@ type Clientface interface {
 	CreateTable(*dynamodb.CreateTableInput) (*dynamodb.CreateTableOutput, error)
 }
 
-// Backofface is interface that holds the backoff strategy
+// Backofface is the interface that holds the backoff strategy
 type Backofface interface {
 	Reset()
 	Attempt() float64
