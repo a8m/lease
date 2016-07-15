@@ -61,6 +61,7 @@ func (c *Coordinator) Start() error {
 		renewerIntervalMills,
 		takerIntervalMills,
 		c.MaxLeasesToStealAtOneTime)
+
 	return nil
 }
 
@@ -88,8 +89,8 @@ func (c *Coordinator) GetLeases() []Lease {
 	return c.renewer.GetHeldLeases()
 }
 
-// Delete the given lease from DB. does nothing when passed
-// a lease that does not exist in the DB.
+// Delete the given lease from DB. does nothing when passed alease that does
+// not exist in the DB.
 func (c *Coordinator) Delete(l Lease) error {
 	return c.manager.DeleteLease(&l)
 }
@@ -104,7 +105,7 @@ func (c *Coordinator) Create(l Lease) (Lease, error) {
 	return *lease, nil
 }
 
-// loop spawn a goroutine and returns a "done" channel related to this goroutine.
+// loop spawn a goroutine and returns a "done" channel that linked to this goroutine.
 // the interval used to create a ticker to run the given loopFunc each x time and
 // the reason string used for logging.
 func (c *Coordinator) loop(fn loopFunc, interval time.Duration, reason string) chan struct{} {
