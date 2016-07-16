@@ -7,8 +7,8 @@
 ### What is a Lease ?
 Lease type contains data pertianing to a Lease.  
 Distributed systems may use leases to partition work across a fleet of workers.  
-Each unit of work (identified by a leaseKey) has a corresponding Lease. 
-Every worker will contend for all leases - only one worker will successfully take each one
+Each unit of work (identified by a leaseKey) has a corresponding Lease.  
+Every worker will contend for all leases - only one worker will successfully take each one.  
 The worker should hold the lease until it is ready to stop processing the corresponding unit of work,
 or until it fails.  
 When the worker stops holding the lease, another worker will take and hold the lease.
