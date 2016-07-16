@@ -1,6 +1,8 @@
-# Lease
+# Lease [![Build status][travis-image]][travis-url] [![License][license-image]][license-url] [![GoDoc][godoc-img]][godoc-url]
 > A generic lease implementation of the [Amazon-KCL.lease][kcl.lease] package. ideal for manage
 > and partition work across a fleet of workers.
+
+![Screenshot](https://github.com/a8m/lease/blob/master/assets/main.jpg)
 
 ### What is a Lease ?
 Lease type contains data pertianing to a Lease.
@@ -11,11 +13,13 @@ The worker should hold the lease until it is ready to stop processing the corres
 or until it fails.
 When the worker stops holding the lease, another worker will take and hold the lease.
 
-![Screenshot](https://github.com/a8m/lease/blob/master/screenshot/main.jpg)
+To get started, see [examples][examples]
+
 
 ### License
 MIT
 
+[examples]:      https://github.com/a8m/lease/tree/master/_examples
 [kcl.lease]:     https://github.com/awslabs/amazon-kinesis-client/tree/master/src/main/java/com/amazonaws/services/kinesis/leases
 [godoc-url]:     https://godoc.org/github.com/a8m/lease
 [godoc-img]:     https://img.shields.io/badge/godoc-reference-blue.svg?style=flat-square
