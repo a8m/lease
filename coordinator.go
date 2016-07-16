@@ -20,10 +20,10 @@ type Coordinator struct {
 type loopFunc func() error
 
 // New create new Coordinator with the given config.
-func New(config *Config) *Coordinator {
+func New(config *Config) Leaser {
 	config.defaults()
 	manager := &LeaseManager{config}
-	c := &Coordinator{
+	return &Coordinator{
 		Config:  config,
 		manager: manager,
 		renewer: &LeaseHolder{
@@ -37,7 +37,6 @@ func New(config *Config) *Coordinator {
 			allLeases: make(map[string]*Lease),
 		},
 	}
-	return c
 }
 
 // Start create the leases table if it's not exist and
