@@ -78,7 +78,7 @@ func (l *leaseTaker) Take() error {
 				l.WorkerId,
 				lease.Key)
 		} else {
-			l.Logger.Debugf("Worker %s taked lease: %s successfully.", l.WorkerId, lease.Key)
+			l.Logger.Debugf("Worker %s took lease: %s successfully.", l.WorkerId, lease.Key)
 		}
 	}
 
