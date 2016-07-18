@@ -3,12 +3,14 @@ package lease
 import "math/rand"
 
 // Taker is the interface that wraps the Take method.
+// It  used by Coordinator to take new leases, or leases that other workers fail to renew.
+// Each Coordinator instance corresponds to one worker and uses exactly one Taker to take
+// leases for that worker.
 type Taker interface {
 	Take() error
 }
 
-// leaseTaker is used by LeaseCoordinator to take new leases, or leases that workers
-// fail to renew.
+// An implementation of Taker that uses DynamoDB via LeaseManager
 type leaseTaker struct {
 	*Config
 	manager Manager
