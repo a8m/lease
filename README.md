@@ -2,7 +2,7 @@
 > A generic lease implementation of the [Amazon-KCL.lease][kcl.lease] package. ideal for manage
 > and partition work across a fleet of workers.
 
-![Screenshot](https://github.com/a8m/lease/blob/master/assets/main.jpg)
+![Screenshot](https://github.com/a8m/lease/blob/master/assets/lease.jpg)
 
 ### What is a Lease ?
 Lease type contains data pertianing to a Lease.  
