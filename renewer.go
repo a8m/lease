@@ -13,9 +13,9 @@ type Renewer interface {
 	GetHeldLeases() []Lease
 }
 
-// LeaseHolder is the default implementation of Renewer that uses DynamoDB
+// leaseHolder is the default implementation of Renewer that uses DynamoDB
 // via LeaseManager
-type LeaseHolder struct {
+type leaseHolder struct {
 	sync.Mutex
 	*Config
 	manager    Manager
@@ -23,7 +23,7 @@ type LeaseHolder struct {
 }
 
 // Attempt to renew all currently held leases.
-func (l *LeaseHolder) Renew() error {
+func (l *leaseHolder) Renew() error {
 	leases, err := l.manager.ListLeases()
 	if err != nil {
 		return err
@@ -83,7 +83,7 @@ func (l *LeaseHolder) Renew() error {
 // A lease is currently held if we successfully renewed it on the last
 // run of Renew()
 // Lease objects returned are copies and their lease counters will not tick.
-func (l *LeaseHolder) GetHeldLeases() (leases []Lease) {
+func (l *leaseHolder) GetHeldLeases() (leases []Lease) {
 	l.Lock()
 	defer l.Unlock()
 	for _, lease := range l.heldLeases {
@@ -93,7 +93,7 @@ func (l *LeaseHolder) GetHeldLeases() (leases []Lease) {
 }
 
 // keys return all worker's leases
-func (l *LeaseHolder) keys() (keys []string) {
+func (l *leaseHolder) keys() (keys []string) {
 	for k, _ := range l.heldLeases {
 		keys = append(keys, k)
 	}

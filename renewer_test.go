@@ -125,7 +125,7 @@ func TestRenewerCases(t *testing.T) {
 		logger := logrus.New()
 		logger.Level = logrus.PanicLevel
 		manager := newManagerMock(test.managerBehavior)
-		holder := &LeaseHolder{
+		holder := &leaseHolder{
 			Config:     &Config{WorkerId: renewerId, Logger: logger},
 			manager:    manager,
 			heldLeases: test.prevState,
