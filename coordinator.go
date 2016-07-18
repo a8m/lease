@@ -7,11 +7,10 @@ import "time"
 // the two previously mentioned components.
 type Coordinator struct {
 	*Config
-
+	Manager Manager
+	Renewer Renewer
+	Taker   Taker
 	// coordinator state
-	manager    Manager
-	renewer    Renewer
-	taker      Taker
 	stopTaker  chan struct{}
 	stopRenwer chan struct{}
 }
@@ -25,13 +24,13 @@ func New(config *Config) Leaser {
 	manager := &LeaseManager{config}
 	return &Coordinator{
 		Config:  config,
-		manager: manager,
-		renewer: &LeaseHolder{
+		Manager: manager,
+		Renewer: &leaseHolder{
 			Config:     config,
 			manager:    manager,
 			heldLeases: make(map[string]*Lease),
 		},
-		taker: &LeaseTaker{
+		Taker: &leaseTaker{
 			Config:    config,
 			manager:   manager,
 			allLeases: make(map[string]*Lease),
@@ -40,17 +39,17 @@ func New(config *Config) Leaser {
 }
 
 // Start create the leases table if it's not exist and
-// then start background LeaseHolder and LeaseTaker handling.
+// then start background leaseHolder and leaseTaker handling.
 func (c *Coordinator) Start() error {
-	if err := c.manager.CreateLeaseTable(); err != nil {
+	if err := c.Manager.CreateLeaseTable(); err != nil {
 		return err
 	}
 
 	takerIntervalMills := (c.ExpireAfter + c.epsilonMills) * 2
 	renewerIntervalMills := c.ExpireAfter/3 - c.epsilonMills
 
-	c.stopTaker = c.loop(c.taker.Take, takerIntervalMills, "take leases")
-	c.stopRenwer = c.loop(c.renewer.Renew, renewerIntervalMills, "renew leases")
+	c.stopTaker = c.loop(c.Taker.Take, takerIntervalMills, "take leases")
+	c.stopRenwer = c.loop(c.Renewer.Renew, renewerIntervalMills, "renew leases")
 
 	c.Logger.Infof("Start coordinator with failover time %s, and epsilon %s. "+
 		"LeaseCoordinator will renew leases every %s, take leases every %s "+
@@ -85,19 +84,19 @@ func (c *Coordinator) Stop() {
 
 // Returns copy of the current held leases.
 func (c *Coordinator) GetLeases() []Lease {
-	return c.renewer.GetHeldLeases()
+	return c.Renewer.GetHeldLeases()
 }
 
 // Delete the given lease from DB. does nothing when passed alease that does
 // not exist in the DB.
 func (c *Coordinator) Delete(l Lease) error {
-	return c.manager.DeleteLease(&l)
+	return c.Manager.DeleteLease(&l)
 }
 
 // Create a new lease. conditional on a lease not already existing with different
 // owner and counter.
 func (c *Coordinator) Create(l Lease) (Lease, error) {
-	lease, err := c.manager.CreateLease(&l)
+	lease, err := c.Manager.CreateLease(&l)
 	if err != nil {
 		return l, err
 	}
