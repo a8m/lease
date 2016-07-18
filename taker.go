@@ -7,13 +7,13 @@ type Taker interface {
 	Take() error
 }
 
-// LeaseTaker is used by LeaseCoordinator to take new leases, or leases that workers
+// leaseTaker is used by LeaseCoordinator to take new leases, or leases that workers
 // fail to renew.
-type LeaseTaker struct {
+type leaseTaker struct {
 	*Config
 	manager Manager
 
-	// LeaseTaker state
+	// leaseTaker state
 	allLeases map[string]*Lease
 }
 
@@ -22,7 +22,7 @@ type LeaseTaker struct {
 // 1) If a lease's counter hasn't changed in long enough(i.e: "expired") set its owner to null.
 // 2) Compute the "leases per worker" and the number we should take.
 // 3) If we need to take leases, try to take expired leases. if there are no expired leases, consider stealing.
-func (l *LeaseTaker) Take() error {
+func (l *leaseTaker) Take() error {
 	list, err := l.manager.ListLeases()
 	if err != nil {
 		return err
@@ -101,7 +101,7 @@ func (l *LeaseTaker) Take() error {
 // Steal up to maxLeasesToStealAtOneTime leases from the most loaded worker if
 // 1. he has > target leases and I need >= 1 leases : steal min(leases needed, maxLeasesToStealAtOneTime)
 // 2. he has == target leases and I need > 1 leases : steal 1
-func (l *LeaseTaker) chooseLeasesToSteal(leaseCounts map[string]int, needed, target int) []*Lease {
+func (l *leaseTaker) chooseLeasesToSteal(leaseCounts map[string]int, needed, target int) []*Lease {
 	var mostLoadedWorker string
 	// find the most loaded worker
 	for worker, count := range leaseCounts {
@@ -153,7 +153,7 @@ func (l *LeaseTaker) chooseLeasesToSteal(leaseCounts map[string]int, needed, tar
 }
 
 // Scan all leases and update lastRenewalTime. Add new leases and delete old leases.
-func (l *LeaseTaker) updateLeases(list []*Lease) {
+func (l *leaseTaker) updateLeases(list []*Lease) {
 	allLeases := make(map[string]*Lease)
 	for _, newLease := range list {
 		// if we've seen this lease before.
@@ -182,7 +182,7 @@ func (l *LeaseTaker) updateLeases(list []*Lease) {
 }
 
 // Get list of leases that were expired as of our last scan.
-func (l *LeaseTaker) getExpiredLeases() (list []*Lease) {
+func (l *leaseTaker) getExpiredLeases() (list []*Lease) {
 	for _, lease := range l.allLeases {
 		if lease.isExpired(l.ExpireAfter) || lease.hasNoOwner() {
 			list = append(list, lease)
@@ -192,7 +192,7 @@ func (l *LeaseTaker) getExpiredLeases() (list []*Lease) {
 }
 
 // Compute the number of leases I should try to take based on the state of the system.
-func (l *LeaseTaker) computeLeaseCounts() map[string]int {
+func (l *leaseTaker) computeLeaseCounts() map[string]int {
 	m := make(map[string]int)
 	for _, lease := range l.allLeases {
 		if lease.hasNoOwner() {

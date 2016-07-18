@@ -100,7 +100,7 @@ func TestTakerCases(t *testing.T) {
 		logger := logrus.New()
 		logger.Level = logrus.PanicLevel
 		manager := newManagerMock(test.managerBehavior)
-		taker := &LeaseTaker{
+		taker := &leaseTaker{
 			Config: &Config{WorkerId: takerId,
 				Logger:                    logger,
 				ExpireAfter:               time.Minute,
