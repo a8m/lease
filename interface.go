@@ -14,7 +14,12 @@ type Lease struct {
 	Owner   string `dynamodbav:"leaseOwner"`
 	Counter int    `dynamodbav:"leaseCounter"`
 
+	// lastRenewal is used by LeaseTaker to track the last time a lease counter was incremented.
+	// It is deliberately not persisted in DynamoDB.
 	lastRenewal time.Time
+	// concurrencyToken is used to prevent updates to leases that we have lost and re-acquired.
+	// It is deliberately not persisted in DynamoDB.
+	concurrencyToken string
 }
 
 // isExpired test if the lease renewal is expired from the given time.
