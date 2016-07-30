@@ -24,9 +24,9 @@ type Lease struct {
 	extrafields map[string]interface{}
 }
 
-// Add extra field to the Lease object before you create or update it
+// Set extra field to the Lease object before you create or update it
 // using the Leaser.
-func (l *Lease) Add(key string, val interface{}) {
+func (l *Lease) Set(key string, val interface{}) {
 	l.extrafields[key] = val
 }
 
