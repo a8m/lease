@@ -20,6 +20,20 @@ type Lease struct {
 	// concurrencyToken is used to prevent updates to leases that we have lost and re-acquired.
 	// It is deliberately not persisted in DynamoDB.
 	concurrencyToken string
+	// extrafields holds all the fields that not belong to this package.
+	extrafields map[string]interface{}
+}
+
+// Add extra field to the Lease object before you create or update it
+// using the Leaser.
+func (l *Lease) Add(key string, val interface{}) {
+	l.extrafields[key] = val
+}
+
+// Get extra field from the Lease object that not belongs to this package.
+func (l *Lease) Get(key string) (interface{}, bool) {
+	val, ok := l.extrafields[key]
+	return val, ok
 }
 
 // isExpired test if the lease renewal is expired from the given time.
