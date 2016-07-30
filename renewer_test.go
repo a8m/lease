@@ -146,7 +146,7 @@ func TestRenewerCases(t *testing.T) {
 		for _, l1 := range test.expectedHeldLeases {
 			found := false
 			for _, l2 := range leases {
-				if l1 == l2 {
+				if l1.Key == l2.Key {
 					found = true
 					break
 				}
