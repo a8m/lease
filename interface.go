@@ -24,9 +24,17 @@ type Lease struct {
 	extrafields map[string]interface{}
 }
 
+// NewLease gets a key(represents the lease key/name) and returns a new Lease object.
+func NewLease(key string) Lease {
+	return Lease{Key: key}
+}
+
 // Set extra field to the Lease object before you create or update it
 // using the Leaser.
 func (l *Lease) Set(key string, val interface{}) {
+	if l.extrafields == nil {
+		l.extrafields = make(map[string]interface{})
+	}
 	l.extrafields[key] = val
 }
 
