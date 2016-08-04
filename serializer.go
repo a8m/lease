@@ -11,9 +11,9 @@ import (
 
 type Serializer interface {
 	// Decode convert the provided dynamodb item to Lease object.
-	Decode(map[string]*dynamodb.AttributeValue) (Lease, error)
+	Decode(map[string]*dynamodb.AttributeValue) (*Lease, error)
 	// Encode serializes the provided Lease object to dynamodb item.
-	Encode(Lease) (map[string]*dynamodb.AttributeValue, error)
+	Encode(*Lease) (map[string]*dynamodb.AttributeValue, error)
 }
 
 // serializer implement the Serializer interface
@@ -27,8 +27,8 @@ func newSerializer() Serializer {
 	}
 }
 
-func (s *serializer) Decode(item map[string]*dynamodb.AttributeValue) (lease Lease, err error) {
-	err = dynamodbattribute.UnmarshalMap(item, &lease)
+func (s *serializer) Decode(item map[string]*dynamodb.AttributeValue) (lease *Lease, err error) {
+	err = dynamodbattribute.UnmarshalMap(item, lease)
 	if err != nil {
 		return
 	}
@@ -48,7 +48,7 @@ func (s *serializer) Decode(item map[string]*dynamodb.AttributeValue) (lease Lea
 	return
 }
 
-func (s *serializer) Encode(lease Lease) (map[string]*dynamodb.AttributeValue, error) {
+func (s *serializer) Encode(lease *Lease) (map[string]*dynamodb.AttributeValue, error) {
 	item := map[string]*dynamodb.AttributeValue{
 		LeaseKeyKey: {
 			S: aws.String(lease.Key),
