@@ -238,8 +238,9 @@ func (l *LeaseManager) CreateLease(lease *Lease) (*Lease, error) {
 	if err != nil {
 		return lease, err
 	}
+	var out *dynamodb.PutItemOutput
 	for l.Backoff.Attempt() < maxCreateRetries {
-		_, err = l.Client.PutItem(&dynamodb.PutItemInput{
+		out, err = l.Client.PutItem(&dynamodb.PutItemInput{
 			TableName:    aws.String(l.LeaseTable),
 			Item:         item,
 			ReturnValues: aws.String(dynamodb.ReturnValueAllOld),
@@ -276,8 +277,14 @@ func (l *LeaseManager) CreateLease(lease *Lease) (*Lease, error) {
 
 		time.Sleep(backoff)
 	}
+
 	l.Backoff.Reset()
-	return lease, err
+
+	if err != nil {
+		return nil, err
+	}
+
+	return l.Serializer.Decode(out.Attributes)
 }
 
 // UpdateLease used to update only the extra fields on the Lease object.
