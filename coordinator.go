@@ -2,9 +2,10 @@ package lease
 
 import "time"
 
-// Coordinator abstracts away LeaseTaker and LeaseRenewer from the
-// application code that's using leasing and it owns the scheduling of
-// the two previously mentioned components.
+// Coordinator is the implemtation of the Leaser interface.
+// It's abstracts away LeaseTaker and LeaseRenewer from the application
+// code that using leasing and it owns the scheduling of two previously
+// mentioned components.
 type Coordinator struct {
 	*Config
 	Manager Manager
@@ -21,7 +22,7 @@ type loopFunc func() error
 // New create new Coordinator with the given config.
 func New(config *Config) Leaser {
 	config.defaults()
-	manager := &LeaseManager{config}
+	manager := &LeaseManager{config, newSerializer()}
 	return &Coordinator{
 		Config:  config,
 		Manager: manager,
@@ -82,7 +83,9 @@ func (c *Coordinator) Stop() {
 	c.Logger.Info("stopped coordinator")
 }
 
-// Returns copy of the current held leases.
+// GetLeases returns the currently held leases.
+// A lease is currently held if we successfully renewed it on the last run of Renewer.Renew().
+// Lease objects returned are copies and their counters will not tick.
 func (c *Coordinator) GetLeases() []Lease {
 	return c.Renewer.GetHeldLeases()
 }
@@ -93,14 +96,52 @@ func (c *Coordinator) Delete(l Lease) error {
 	return c.Manager.DeleteLease(&l)
 }
 
-// Create a new lease. conditional on a lease not already existing with different
-// owner and counter.
+// Create a new lease.
+// Conditional on a lease not already existing with different owner and counter.
 func (c *Coordinator) Create(l Lease) (Lease, error) {
-	lease, err := c.Manager.CreateLease(&l)
+	cl := l
+	lease, err := c.Manager.CreateLease(&cl)
 	if err != nil {
 		return l, err
 	}
 	return *lease, nil
+}
+
+// Update used to update only the extra fields on the Lease object and
+// it cannot be used to update internal fields such as leaseCounter, leaseOwner.
+//
+// Fails if we do not hold the lease, or if the concurrency token does not match
+// the concurrency token on the internal authoritative copy of the lease
+// (ie, if we lost and re-acquired the lease).
+//
+// With this method you will be able to update the task status, or any
+// other fields.
+// for example: {"status": "done", "last_update": "unix seconds"}
+// To add extra fields on a Lease, use Lease.Set(key, val)
+func (c *Coordinator) Update(lease Lease) (Lease, error) {
+	var heldLease Lease
+	for _, hlease := range c.Renewer.GetHeldLeases() {
+		if lease.Key == hlease.Key {
+			heldLease = hlease
+			break
+		}
+	}
+
+	// fails if we don't hold the passed-in lease object
+	if heldLease.hasNoOwner() {
+		return lease, ErrLeaseNotHeld
+	}
+
+	// or if the concurrency token does not match
+	if heldLease.concurrencyToken != lease.concurrencyToken {
+		return lease, ErrTokenNotMatch
+	}
+
+	ulease, err := c.Manager.UpdateLease(&lease)
+	if err != nil {
+		return lease, err
+	}
+	return *ulease, nil
 }
 
 // loop spawn a goroutine and returns a "done" channel that linked to this goroutine.
