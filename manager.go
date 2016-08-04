@@ -9,7 +9,6 @@ import (
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/aws/aws-sdk-go/aws/awserr"
 	"github.com/aws/aws-sdk-go/service/dynamodb"
-	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 )
 
 const (
@@ -51,12 +50,16 @@ type Manager interface {
 
 	// Create a lease
 	CreateLease(*Lease) (*Lease, error)
+
+	// Update a lease
+	UpdateLease(*Lease) (*Lease, error)
 }
 
 // LeaseManager is the default implemntation of Manager
 // that uses DynamoDB.
 type LeaseManager struct {
 	*Config
+	Serializer Serializer
 }
 
 // CreateLeaseTable creates the table that will store the leases. succeeds
@@ -111,7 +114,7 @@ func (l *LeaseManager) CreateLeaseTable() (err error) {
 func (l *LeaseManager) RenewLease(lease *Lease) (err error) {
 	clease := *lease
 	clease.Counter++
-	if err = l.updateLease(clease, *lease); err == nil {
+	if err = l.condUpdate(clease, *lease); err == nil {
 		lease.Counter = clease.Counter
 	}
 	return
@@ -123,7 +126,7 @@ func (l *LeaseManager) RenewLease(lease *Lease) (err error) {
 func (l *LeaseManager) EvictLease(lease *Lease) (err error) {
 	clease := *lease
 	clease.Owner = "NULL"
-	if err = l.updateLease(clease, *lease); err == nil {
+	if err = l.condUpdate(clease, *lease); err == nil {
 		lease.Owner = clease.Owner
 	}
 	return
@@ -136,85 +139,10 @@ func (l *LeaseManager) TakeLease(lease *Lease) (err error) {
 	clease := *lease
 	clease.Counter++
 	clease.Owner = l.WorkerId
-	if err = l.updateLease(clease, *lease); err == nil {
+	if err = l.condUpdate(clease, *lease); err == nil {
 		lease.Owner = clease.Owner
 		lease.Counter = clease.Counter
 	}
-	return
-}
-
-// UpdateLease gets a lease and update it in the leasing table.
-func (l *LeaseManager) updateLease(updateLease, condLease Lease) (err error) {
-	updateInput := &dynamodb.UpdateItemInput{
-		TableName: aws.String(l.LeaseTable),
-		Key: map[string]*dynamodb.AttributeValue{
-			LeaseKeyKey: {
-				S: aws.String(updateLease.Key),
-			},
-		},
-		ReturnValues: aws.String(dynamodb.ReturnValueAllNew),
-		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
-			":owner": {
-				S: aws.String(updateLease.Owner),
-			},
-			":count": {
-				N: aws.String(strconv.Itoa(updateLease.Counter)),
-			},
-		},
-		UpdateExpression: aws.String(fmt.Sprintf(
-			"SET %s = :owner, %s = :count",
-			LeaseOwnerKey,
-			LeaseCounterKey,
-		)),
-	}
-
-	// add conditions only to veteran leases
-	var condExp string
-	var attrExp = make(map[string]*string)
-	if condLease.Counter > 0 {
-		updateInput.ExpressionAttributeValues[":condCounter"] = &dynamodb.AttributeValue{
-			N: aws.String(strconv.Itoa(condLease.Counter)),
-		}
-		attrExp["#counter"] = aws.String(LeaseCounterKey)
-		condExp = ":condCounter = #counter"
-	}
-	if condLease.Owner != "" {
-		updateInput.ExpressionAttributeValues[":condOwner"] = &dynamodb.AttributeValue{
-			S: aws.String(condLease.Owner),
-		}
-		attrExp["#owner"] = aws.String(LeaseOwnerKey)
-		if condExp != "" {
-			condExp += " AND "
-		}
-		condExp += ":condOwner = #owner"
-	}
-	if condExp != "" {
-		updateInput.ExpressionAttributeNames = attrExp
-		updateInput.ConditionExpression = aws.String(condExp)
-	}
-
-	for l.Backoff.Attempt() < maxUpdateRetries {
-		_, err = l.Client.UpdateItem(updateInput)
-
-		if err == nil {
-			break
-		}
-
-		if awsErr, ok := err.(awserr.Error); ok && awsErr.Code() == ConditionalFailed {
-			break
-		}
-
-		backoff := l.Backoff.Duration()
-
-		l.Logger.WithFields(logrus.Fields{
-			"backoff": backoff,
-			"attempt": int(l.Backoff.Attempt()),
-		}).Warnf("Worker %s failed to update lease", l.WorkerId)
-
-		time.Sleep(backoff)
-	}
-
-	l.Backoff.Reset()
 	return
 }
 
@@ -237,10 +165,10 @@ func (l *LeaseManager) ListLeases() (list []*Lease, err error) {
 			continue
 		}
 		for _, item := range res.Items {
-			lease := new(Lease)
-			if err := dynamodbattribute.UnmarshalMap(item, lease); err == nil {
+			if lease, err := l.Serializer.Decode(item); err != nil {
+				l.Logger.WithError(err).Error("decode lease")
+			} else {
 				list = append(list, lease)
-				lease.lastRenewal = time.Now()
 			}
 		}
 		break
@@ -306,21 +234,14 @@ func (l *LeaseManager) CreateLease(lease *Lease) (*Lease, error) {
 	if lease.Counter == 0 {
 		lease.Counter++
 	}
-	var err error
+	item, err := l.Serializer.Encode(lease)
+	if err != nil {
+		return lease, err
+	}
 	for l.Backoff.Attempt() < maxCreateRetries {
 		_, err = l.Client.PutItem(&dynamodb.PutItemInput{
-			TableName: aws.String(l.LeaseTable),
-			Item: map[string]*dynamodb.AttributeValue{
-				LeaseKeyKey: {
-					S: aws.String(lease.Key),
-				},
-				LeaseOwnerKey: {
-					S: aws.String(lease.Owner),
-				},
-				LeaseCounterKey: {
-					N: aws.String(strconv.Itoa(lease.Counter)),
-				},
-			},
+			TableName:    aws.String(l.LeaseTable),
+			Item:         item,
 			ReturnValues: aws.String(dynamodb.ReturnValueAllOld),
 			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
 				":condOwner": {
@@ -357,4 +278,138 @@ func (l *LeaseManager) CreateLease(lease *Lease) (*Lease, error) {
 	}
 	l.Backoff.Reset()
 	return lease, err
+}
+
+// UpdateLease used to update only the extra fields on the Lease object.
+// With this method you will be able to update the task status, or any
+// other fields.
+// for example: {"status": "done", "last_update": "unix seconds"}
+// To add extra fields on a Lease, use Lease.Set(key, val)
+func (l *LeaseManager) UpdateLease(lease *Lease) (*Lease, error) {
+	if len(lease.extrafields) == 0 {
+		return lease, nil
+	}
+	item, err := l.Serializer.Encode(lease)
+	if err != nil {
+		return lease, nil
+	}
+	var (
+		attExp = "SET"
+		attVal = make(map[string]*dynamodb.AttributeValue)
+	)
+	for k, v := range item {
+		if k == LeaseKeyKey || k == LeaseOwnerKey || k == LeaseCounterKey {
+			continue
+		}
+		attExp += fmt.Sprintf(" %s = :%s", k, k)
+		attVal[":"+k] = v
+	}
+
+	return l.updateLease(&dynamodb.UpdateItemInput{
+		TableName: aws.String(l.LeaseTable),
+		Key: map[string]*dynamodb.AttributeValue{
+			LeaseKeyKey: {
+				S: aws.String(lease.Key),
+			},
+		},
+		UpdateExpression:          aws.String(attExp),
+		ExpressionAttributeValues: attVal,
+		ReturnValues:              aws.String(dynamodb.ReturnValueAllNew),
+	})
+}
+
+// condLease gets a 2 Lease objects. the first one is for the update attributes
+// and the second used to construct the condition expression.
+func (l *LeaseManager) condUpdate(updateLease, condLease Lease) (err error) {
+	updateInput := &dynamodb.UpdateItemInput{
+		TableName: aws.String(l.LeaseTable),
+		Key: map[string]*dynamodb.AttributeValue{
+			LeaseKeyKey: {
+				S: aws.String(updateLease.Key),
+			},
+		},
+		ReturnValues: aws.String(dynamodb.ReturnValueAllNew),
+		ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
+			":owner": {
+				S: aws.String(updateLease.Owner),
+			},
+			":count": {
+				N: aws.String(strconv.Itoa(updateLease.Counter)),
+			},
+		},
+		UpdateExpression: aws.String(fmt.Sprintf(
+			"SET %s = :owner, %s = :count",
+			LeaseOwnerKey,
+			LeaseCounterKey,
+		)),
+	}
+
+	// add conditions only to veteran leases
+	var (
+		condExp string
+		attrExp = make(map[string]*string)
+	)
+	if condLease.Counter > 0 {
+		updateInput.ExpressionAttributeValues[":condCounter"] = &dynamodb.AttributeValue{
+			N: aws.String(strconv.Itoa(condLease.Counter)),
+		}
+		attrExp["#counter"] = aws.String(LeaseCounterKey)
+		condExp = ":condCounter = #counter"
+	}
+	if condLease.Owner != "" {
+		updateInput.ExpressionAttributeValues[":condOwner"] = &dynamodb.AttributeValue{
+			S: aws.String(condLease.Owner),
+		}
+		attrExp["#owner"] = aws.String(LeaseOwnerKey)
+		if condExp != "" {
+			condExp += " AND "
+		}
+		condExp += ":condOwner = #owner"
+	}
+	if condExp != "" {
+		updateInput.ExpressionAttributeNames = attrExp
+		updateInput.ConditionExpression = aws.String(condExp)
+	}
+
+	_, err = l.updateLease(updateInput)
+
+	return
+}
+
+// updateLease gets updateInput and call Client.Update with the retries logic.
+// use this method to reduce duplicate code.
+// if the operation success we serialize the response and return the result.
+func (l *LeaseManager) updateLease(input *dynamodb.UpdateItemInput) (*Lease, error) {
+	var (
+		err error
+		out *dynamodb.UpdateItemOutput
+	)
+	for l.Backoff.Attempt() < maxUpdateRetries {
+		out, err = l.Client.UpdateItem(input)
+
+		if err == nil {
+			break
+		}
+
+		if awsErr, ok := err.(awserr.Error); ok && awsErr.Code() == ConditionalFailed {
+			break
+		}
+
+		backoff := l.Backoff.Duration()
+
+		l.Logger.WithFields(logrus.Fields{
+			"backoff": backoff,
+			"attempt": int(l.Backoff.Attempt()),
+		}).Warnf("Worker %s failed to update lease", l.WorkerId)
+
+		time.Sleep(backoff)
+	}
+
+	l.Backoff.Reset()
+
+	if err != nil {
+		return nil, err
+	}
+
+	return l.Serializer.Decode(out.Attributes)
 }
