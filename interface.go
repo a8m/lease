@@ -1,6 +1,22 @@
 package lease
 
-import "time"
+import (
+	"errors"
+	"time"
+)
+
+var (
+	// ErrTokenNotMatch and ErrLeaseNotHeld could be returns only on the Update() call.
+	//
+	// If the concurrency token of the passed-in lease doesn't match the
+	// concurrency token of the authoritative lease, it means the lease was
+	// lost and regained between when the caller acquired his concurrency
+	// token and when the caller called update.
+	ErrTokenNotMatch = errors.New("leaser: concurrency token doesn't match the authoritative lease")
+	// ErrLeaseNotHeld error will be returns only if the passed-in lease object
+	// does not held be this  worker.
+	ErrLeaseNotHeld = errors.New("leaser: worker does not hold the passed-in lease object")
+)
 
 // Lease type contains data pertianing to a Lease.
 // Distributed systems may use leases to partition work across a fleet of workers.
@@ -61,4 +77,5 @@ type Leaser interface {
 	GetLeases() []Lease
 	Delete(Lease) error
 	Create(Lease) (Lease, error)
+	Update(Lease) (Lease, error)
 }
