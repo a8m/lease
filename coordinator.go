@@ -98,13 +98,12 @@ func (c *Coordinator) Delete(l Lease) error {
 
 // Create a new lease.
 // Conditional on a lease not already existing with different owner and counter.
-func (c *Coordinator) Create(l Lease) (Lease, error) {
-	cl := l
-	lease, err := c.Manager.CreateLease(&cl)
+func (c *Coordinator) Create(lease Lease) (Lease, error) {
+	clease, err := c.Manager.CreateLease(&lease)
 	if err != nil {
-		return l, err
+		return lease, err
 	}
-	return *lease, nil
+	return *clease, nil
 }
 
 // Update used to update only the extra fields on the Lease object and
