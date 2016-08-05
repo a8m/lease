@@ -85,7 +85,6 @@ func TestRenewLease(t *testing.T) {
 	err := manager.RenewLease(leaseToRenew)
 	assert(t, err == nil, "expect not to fail")
 	assert(t, leaseToRenew.Counter == 11, "expect leaseCounter to be 11")
-
 	err = manager.RenewLease(leaseToRenew)
 	assert(t, err != nil, "expect to returns the error")
 	assert(t, leaseToRenew.Counter == 11, "expect leaseCounter to be 11")
@@ -164,7 +163,19 @@ func TestCreateLease(t *testing.T) {
 	client := newClientMock(map[method]args{
 		methodPutItem: {
 			// delete item finished successfully
-			new(dynamodb.PutItemOutput),
+			&dynamodb.PutItemOutput{
+				Attributes: map[string]*dynamodb.AttributeValue{
+					"leaseKey": {
+						S: aws.String("bar"),
+					},
+					"leaseOwner": {
+						S: aws.String("workerId"),
+					},
+					"leaseCounter": {
+						N: aws.String("1"),
+					},
+				},
+			},
 			// getting "conditional error"
 			awserr.New("ConditionalCheckFailedException", "", errors.New("")),
 			// getting error from dynamodb
@@ -172,6 +183,7 @@ func TestCreateLease(t *testing.T) {
 		},
 	})
 	manager := newTestManager(client)
+	manager.WorkerId = "workerId"
 
 	leaseToCreate := &Lease{Key: "bar"}
 	lease, err := manager.CreateLease(leaseToCreate)
@@ -197,6 +209,7 @@ const (
 	// Manager methods
 	methodCreate = iota
 	methodLCreate
+	methodUpdate
 	methodDelete
 	methodRenew
 	methodEvict
@@ -336,7 +349,7 @@ func newTestManager(client Clientface) *LeaseManager {
 		Backoff:    &Backoff{b: &backoff.Backoff{Min: 0, Max: 0}},
 	}
 	config.defaults()
-	return &LeaseManager{config}
+	return &LeaseManager{config, newSerializer()}
 }
 
 type managerMock struct {
@@ -380,6 +393,10 @@ func (m *managerMock) DeleteLease(*Lease) error {
 
 func (m *managerMock) CreateLease(l *Lease) (*Lease, error) {
 	return l, m.errOnly(methodLCreate)
+}
+
+func (m *managerMock) UpdateLease(l *Lease) (*Lease, error) {
+	return l, m.errOnly(methodUpdate)
 }
 
 func (m *managerMock) RenewLease(*Lease) error {
