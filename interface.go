@@ -142,6 +142,12 @@ func (l *Lease) Get(key string) (interface{}, bool) {
 	return nil, false
 }
 
+// Del deletes extra field for the lease object.
+func (l *Lease) Del(key string) {
+	delete(l.extrafields, key)
+	delete(l.explicitfields, key)
+}
+
 // isExpired test if the lease renewal is expired from the given time.
 func (l *Lease) isExpired(t time.Duration) bool {
 	return time.Since(l.lastRenewal) > t
