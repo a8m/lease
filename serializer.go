@@ -27,10 +27,10 @@ func newSerializer() Serializer {
 	}
 }
 
-func (s *serializer) Decode(item map[string]*dynamodb.AttributeValue) (lease *Lease, err error) {
-	err = dynamodbattribute.UnmarshalMap(item, lease)
-	if err != nil {
-		return
+func (s *serializer) Decode(item map[string]*dynamodb.AttributeValue) (*Lease, error) {
+	lease := new(Lease)
+	if err := dynamodbattribute.UnmarshalMap(item, lease); err != nil {
+		return nil, err
 	}
 
 	lease.lastRenewal = time.Now()
@@ -45,7 +45,7 @@ func (s *serializer) Decode(item map[string]*dynamodb.AttributeValue) (lease *Le
 		dynamodbattribute.ConvertFromMap(item, &fields)
 		lease.extrafields = fields
 	}
-	return
+	return lease, nil
 }
 
 func (s *serializer) Encode(lease *Lease) (map[string]*dynamodb.AttributeValue, error) {
