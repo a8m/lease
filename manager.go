@@ -238,12 +238,10 @@ func (l *LeaseManager) CreateLease(lease *Lease) (*Lease, error) {
 	if err != nil {
 		return lease, err
 	}
-	var out *dynamodb.PutItemOutput
 	for l.Backoff.Attempt() < maxCreateRetries {
-		out, err = l.Client.PutItem(&dynamodb.PutItemInput{
-			TableName:    aws.String(l.LeaseTable),
-			Item:         item,
-			ReturnValues: aws.String(dynamodb.ReturnValueAllOld),
+		_, err = l.Client.PutItem(&dynamodb.PutItemInput{
+			TableName: aws.String(l.LeaseTable),
+			Item:      item,
 			ExpressionAttributeValues: map[string]*dynamodb.AttributeValue{
 				":condOwner": {
 					S: aws.String(lease.Owner),
@@ -284,7 +282,9 @@ func (l *LeaseManager) CreateLease(lease *Lease) (*Lease, error) {
 		return nil, err
 	}
 
-	return l.Serializer.Decode(out.Attributes)
+	// the ReturnValues argument can only be ALL_OLD or NONE, it means that
+	// our lease object is the most updated.
+	return lease, nil
 }
 
 // UpdateLease used to update only the extra fields on the Lease object.
