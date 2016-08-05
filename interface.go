@@ -3,6 +3,22 @@ package lease
 import (
 	"errors"
 	"time"
+
+	"github.com/aws/aws-sdk-go/aws"
+	"github.com/aws/aws-sdk-go/service/dynamodb"
+)
+
+// AttributeType used to explicitly set the DynamoDB data type
+// when setting an extra field on a lease object.
+type AttributeType int
+
+const (
+	// A string set data type
+	StringSet AttributeType = iota
+	// A number set data type
+	NumberSet
+	// A binary set data type
+	BinarySet
 )
 
 var (
@@ -16,6 +32,11 @@ var (
 	// ErrLeaseNotHeld error will be returns only if the passed-in lease object
 	// does not held be this  worker.
 	ErrLeaseNotHeld = errors.New("leaser: worker does not hold the passed-in lease object")
+	// ErrValueNotMatch error will be returns only if you tring to set an extra field on
+	// a lease object using the SetAs method and the field value does not match the field
+	// type.
+	// for example: StringSet type excepts only []string{...}
+	ErrValueNotMatch = errors.New("leaser: field value does not match the field type")
 )
 
 // Lease type contains data pertianing to a Lease.
@@ -38,6 +59,8 @@ type Lease struct {
 	concurrencyToken string
 	// extrafields holds all the fields that not belong to this package.
 	extrafields map[string]interface{}
+	// explicitfields holds all the fields that set using SetAs method
+	explicitfields map[string]*dynamodb.AttributeValue
 }
 
 // NewLease gets a key(represents the lease key/name) and returns a new Lease object.
@@ -52,12 +75,71 @@ func (l *Lease) Set(key string, val interface{}) {
 		l.extrafields = make(map[string]interface{})
 	}
 	l.extrafields[key] = val
+	// make sure that this key does not exist in the explicit fields map
+	delete(l.explicitfields, key)
+}
+
+// SetAs is like the Set method, but with another argument "typ" that explicitly
+// sets the DynamoDB data type.
+//
+// For example:
+//
+//    Set("key", []string{"foo", "bar"})               // add this field as a List
+//    SetAs("key", []string{"foo", "bar"}, StringSet)  // add this field as a string set
+//
+// Error will be returns only if the field value does not match the field type.
+func (l *Lease) SetAs(key string, val interface{}, typ AttributeType) error {
+	if l.explicitfields == nil {
+		l.explicitfields = make(map[string]*dynamodb.AttributeValue)
+	}
+	ok := false
+	switch typ {
+	case StringSet, NumberSet:
+		var ss []string
+		if ss, ok = val.([]string); ok {
+			v := &dynamodb.AttributeValue{
+				SS: aws.StringSlice(ss),
+			}
+			if typ == NumberSet {
+				v = &dynamodb.AttributeValue{
+					NS: aws.StringSlice(ss),
+				}
+			}
+			l.explicitfields[key] = v
+		}
+	case BinarySet:
+		var bs [][]byte
+		if bs, ok = val.([][]byte); ok {
+			l.explicitfields[key] = &dynamodb.AttributeValue{
+				BS: bs,
+			}
+		}
+	}
+	if !ok {
+		return ErrValueNotMatch
+	}
+	// make sure that this key does not exist in the extra fields map
+	delete(l.extrafields, key)
+	return nil
 }
 
 // Get extra field from the Lease object that not belongs to this package.
 func (l *Lease) Get(key string) (interface{}, bool) {
-	val, ok := l.extrafields[key]
-	return val, ok
+	if val, ok := l.extrafields[key]; ok {
+		return val, ok
+	}
+	if val, ok := l.explicitfields[key]; ok {
+		var ret interface{}
+		if val.NS != nil {
+			ret = aws.StringValueSlice(val.NS)
+		} else if val.SS != nil {
+			ret = aws.StringValueSlice(val.SS)
+		} else {
+			ret = val.BS
+		}
+		return ret, ok
+	}
+	return nil, false
 }
 
 // isExpired test if the lease renewal is expired from the given time.
