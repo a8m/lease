@@ -41,9 +41,21 @@ func (s *serializer) Decode(item map[string]*dynamodb.AttributeValue) (*Lease, e
 		delete(item, k)
 	}
 	if len(item) > 0 {
-		fields := make(map[string]interface{})
-		dynamodbattribute.ConvertFromMap(item, &fields)
-		lease.extrafields = fields
+		var (
+			extrafields    = make(map[string]interface{})
+			explicitfields = make(map[string]*dynamodb.AttributeValue)
+		)
+		// set the explicit fields
+		for k, v := range item {
+			if v.SS != nil || v.BS != nil || v.NS != nil {
+				explicitfields[k] = v
+				delete(item, k)
+			}
+		}
+		// set the extra fields
+		dynamodbattribute.ConvertFromMap(item, &extrafields)
+		lease.extrafields = extrafields
+		lease.explicitfields = explicitfields
 	}
 	return lease, nil
 }
@@ -65,6 +77,12 @@ func (s *serializer) Encode(lease *Lease) (map[string]*dynamodb.AttributeValue, 
 	// and avoid unwanted behavior
 	for _, k := range s.schemakeys {
 		delete(lease.extrafields, k)
+	}
+
+	if len(lease.explicitfields) > 0 {
+		for k, v := range lease.explicitfields {
+			item[k] = v
+		}
 	}
 
 	if len(lease.extrafields) > 0 {
