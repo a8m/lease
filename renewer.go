@@ -16,7 +16,7 @@ type Renewer interface {
 // leaseHolder is the default implementation of Renewer that uses DynamoDB
 // via LeaseManager
 type leaseHolder struct {
-	sync.Mutex
+	sync.RWMutex
 	*Config
 	manager    Manager
 	heldLeases map[string]*Lease
@@ -56,9 +56,12 @@ func (l *leaseHolder) Renew() error {
 	// that we still hold.
 	for _, lease := range leases {
 		if lease.Owner == l.WorkerId {
-			l.Lock()
-			l.heldLeases[lease.Key] = lease
-			l.Unlock()
+			// if we took this lease and it's not holds by this renewer
+			if _, ok := l.heldLeases[lease.Key]; !ok {
+				l.Lock()
+				l.heldLeases[lease.Key] = lease
+				l.Unlock()
+			}
 			if err := l.manager.RenewLease(lease); err != nil {
 				l.Logger.Debugf("Worker %s could not renew lease with key %s", l.WorkerId, lease.Key)
 			}
@@ -84,8 +87,8 @@ func (l *leaseHolder) Renew() error {
 // run of Renew()
 // Lease objects returned are copies and their lease counters will not tick.
 func (l *leaseHolder) GetHeldLeases() (leases []Lease) {
-	l.Lock()
-	defer l.Unlock()
+	l.RLock()
+	defer l.RUnlock()
 	for _, lease := range l.heldLeases {
 		leases = append(leases, *lease)
 	}
