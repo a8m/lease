@@ -61,6 +61,8 @@ type Lease struct {
 	extrafields map[string]interface{}
 	// explicitfields holds all the fields that set using SetAs method
 	explicitfields map[string]*dynamodb.AttributeValue
+	// removed attributes; used to create the update expression.
+	removedfields []string
 }
 
 // NewLease gets a key(represents the lease key/name) and returns a new Lease object.
@@ -75,7 +77,7 @@ func (l *Lease) Set(key string, val interface{}) {
 		l.extrafields = make(map[string]interface{})
 	}
 	l.extrafields[key] = val
-	// make sure that this key does not exist in the explicit fields map
+	// make sure that this key does not exists in the explicit fields map
 	delete(l.explicitfields, key)
 }
 
@@ -84,7 +86,7 @@ func (l *Lease) Set(key string, val interface{}) {
 //
 // For example:
 //
-//    Set("key", []string{"foo", "bar"})               // add this field as a List
+//    Set("key", []string{"foo", "bar"})               // add this field as a list
 //    SetAs("key", []string{"foo", "bar"}, StringSet)  // add this field as a string set
 //
 // Error will be returns only if the field value does not match the field type.
@@ -118,7 +120,7 @@ func (l *Lease) SetAs(key string, val interface{}, typ AttributeType) error {
 	if !ok {
 		return ErrValueNotMatch
 	}
-	// make sure that this key does not exist in the extra fields map
+	// make sure that this key does not exists in the extra fields map
 	delete(l.extrafields, key)
 	return nil
 }
@@ -142,10 +144,17 @@ func (l *Lease) Get(key string) (interface{}, bool) {
 	return nil, false
 }
 
-// Del deletes extra field for the lease object.
+// Del deletes extra field of the lease object.
 func (l *Lease) Del(key string) {
-	delete(l.extrafields, key)
-	delete(l.explicitfields, key)
+	var ok bool
+	if _, ok = l.extrafields[key]; ok {
+		delete(l.extrafields, key)
+	} else if _, ok = l.explicitfields[key]; ok {
+		delete(l.explicitfields, key)
+	}
+	if ok {
+		l.removedfields = append(l.removedfields, key)
+	}
 }
 
 // isExpired test if the lease renewal is expired from the given time.
