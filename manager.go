@@ -3,6 +3,7 @@ package lease
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/Sirupsen/logrus"
@@ -293,23 +294,50 @@ func (l *LeaseManager) CreateLease(lease *Lease) (*Lease, error) {
 // for example: {"status": "done", "last_update": "unix seconds"}
 // To add extra fields on a Lease, use Lease.Set(key, val)
 func (l *LeaseManager) UpdateLease(lease *Lease) (*Lease, error) {
-	if len(lease.extrafields) == 0 {
-		return lease, nil
-	}
-	item, err := l.Serializer.Encode(lease)
-	if err != nil {
-		return lease, nil
-	}
 	var (
-		attExp = "SET"
-		attVal = make(map[string]*dynamodb.AttributeValue)
+		attExp     string
+		attVal     map[string]*dynamodb.AttributeValue
+		isReserved = func(w string) bool { return w == LeaseKeyKey || w == LeaseOwnerKey || w == LeaseCounterKey }
 	)
-	for k, v := range item {
-		if k == LeaseKeyKey || k == LeaseOwnerKey || k == LeaseCounterKey {
-			continue
+
+	// set fields
+	if len(lease.extrafields) > 0 || len(lease.explicitfields) > 0 {
+		item, err := l.Serializer.Encode(lease)
+		if err != nil {
+			return lease, err
 		}
-		attExp += fmt.Sprintf(" %s = :%s", k, k)
-		attVal[":"+k] = v
+		setExp := make([]string, 0)
+		for k, v := range item {
+			if !isReserved(k) {
+				// if it's the first time we add entry to the map
+				if attVal == nil {
+					attVal = make(map[string]*dynamodb.AttributeValue)
+				}
+				setExp = append(setExp, fmt.Sprintf("%s = :%s", k, k))
+				attVal[":"+k] = v
+			}
+		}
+		if len(setExp) > 0 {
+			attExp += "SET " + strings.Join(setExp, ", ")
+		}
+	}
+
+	// remove fields
+	if len(lease.removedfields) > 0 {
+		rmExp := make([]string, 0)
+		for _, f := range lease.removedfields {
+			if !isReserved(f) {
+				rmExp = append(rmExp, f)
+			}
+		}
+		if len(rmExp) > 0 {
+			attExp += " REMOVE " + strings.Join(rmExp, ", ")
+		}
+	}
+
+	// if there's nothing to update
+	if attExp == "" {
+		return lease, nil
 	}
 
 	return l.updateLease(&dynamodb.UpdateItemInput{
