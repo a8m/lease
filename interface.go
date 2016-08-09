@@ -72,6 +72,11 @@ func NewLease(key string) Lease {
 
 // Set extra field to the Lease object before you create or update it
 // using the Leaser.
+//
+// Use this method to add meta-data on the lease. for example:
+//
+//    lease.Set("success", true)
+//    lease.Set("checkpoint", 35465786912)
 func (l *Lease) Set(key string, val interface{}) {
 	if l.extrafields == nil {
 		l.extrafields = make(map[string]interface{})
