@@ -40,7 +40,7 @@ func (l *leaseTaker) Take() error {
 	if len(l.allLeases) > numWorkers {
 		target = len(l.allLeases) / numWorkers
 		if len(list)%numWorkers != 0 {
-			target += 1
+			target++
 		}
 	}
 
@@ -132,16 +132,16 @@ func (l *leaseTaker) chooseLeasesToSteal(leaseCounts map[string]int, needed, tar
 			target,
 			needed)
 		return nil
-	} else {
-		l.Logger.Debugf("Worker %s will attempt to steal %d leases from most loaded worker %s.\n"+
-			"He has %d leases, target is %d, and I need %d.",
-			l.WorkerId,
-			numLeasesToSteal,
-			mostLoadedWorker,
-			leaseCounts[mostLoadedWorker],
-			target,
-			needed)
 	}
+
+	l.Logger.Debugf("Worker %s will attempt to steal %d leases from most loaded worker %s.\n"+
+		"He has %d leases, target is %d, and I need %d.",
+		l.WorkerId,
+		numLeasesToSteal,
+		mostLoadedWorker,
+		leaseCounts[mostLoadedWorker],
+		target,
+		needed)
 
 	var candidates []*Lease
 	for _, lease := range l.allLeases {
