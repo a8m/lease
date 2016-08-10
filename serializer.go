@@ -9,6 +9,8 @@ import (
 	"github.com/aws/aws-sdk-go/service/dynamodb/dynamodbattribute"
 )
 
+// Serializer used to encode and decode lease objects to DynamoDB records
+// and vice versa.
 type Serializer interface {
 	// Decode convert the provided dynamodb item to Lease object.
 	Decode(map[string]*dynamodb.AttributeValue) (*Lease, error)
@@ -88,10 +90,9 @@ func (s *serializer) Encode(lease *Lease) (map[string]*dynamodb.AttributeValue, 
 	if len(lease.extrafields) > 0 {
 		if fields, err := dynamodbattribute.MarshalMap(lease.extrafields); err != nil {
 			return nil, err
-		} else {
-			for k, v := range fields {
-				item[k] = v
-			}
+		}
+		for k, v := range fields {
+			item[k] = v
 		}
 	}
 
