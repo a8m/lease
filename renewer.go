@@ -5,7 +5,7 @@ import (
 	"sync"
 )
 
-// LeaseRenewer used by the LeaseCoordinator to renew leases held by the system.
+// Renewer used by the LeaseCoordinator to renew leases held by the system.
 // Each LeaseCoordinator instance corresponds to one worker and uses exactly one LeaseRenewer
 // to manage lease renewal for that worker.
 type Renewer interface {
@@ -30,8 +30,8 @@ func (l *leaseHolder) Renew() error {
 	}
 
 	// remove leases that deleted from the DynamoDB table.
-	lostLeases := make([]string, 0)
-	for key, _ := range l.heldLeases {
+	var lostLeases []string
+	for key := range l.heldLeases {
 		exist := false
 		for _, lease := range leases {
 			if lease.Key == key {
@@ -97,7 +97,7 @@ func (l *leaseHolder) GetHeldLeases() (leases []Lease) {
 
 // keys return all worker's leases
 func (l *leaseHolder) keys() (keys []string) {
-	for k, _ := range l.heldLeases {
+	for k := range l.heldLeases {
 		keys = append(keys, k)
 	}
 	return keys
