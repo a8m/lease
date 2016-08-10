@@ -43,6 +43,7 @@ type Logger interface {
 	Warnf(string, ...interface{})
 }
 
+// Config is the representation of Coordinator settings.
 type Config struct {
 	// Client is a Clientface implemetation.
 	Client Clientface
