@@ -13,11 +13,11 @@ import (
 type AttributeType int
 
 const (
-	// A string set data type
+	// StringSet is a string set data type
 	StringSet AttributeType = iota
-	// A number set data type
+	// NumberSet is a  number set data type
 	NumberSet
-	// A binary set data type
+	// BinarySet is a binary set data type
 	BinarySet
 )
 
