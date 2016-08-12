@@ -90,9 +90,10 @@ func (s *serializer) Encode(lease *Lease) (map[string]*dynamodb.AttributeValue, 
 	if len(lease.extrafields) > 0 {
 		if fields, err := dynamodbattribute.MarshalMap(lease.extrafields); err != nil {
 			return nil, err
-		}
-		for k, v := range fields {
-			item[k] = v
+		} else {
+			for k, v := range fields {
+				item[k] = v
+			}
 		}
 	}
 
