@@ -70,7 +70,7 @@ func NewLease(key string) Lease {
 	return Lease{Key: key}
 }
 
-// Set extra field to the Lease object before you create or update it
+// Set extra field(metadata) to the Lease object before you create or update it
 // using the Leaser.
 //
 // Use this method to add meta-data on the lease. for example:
@@ -130,7 +130,7 @@ func (l *Lease) SetAs(key string, val interface{}, typ AttributeType) error {
 	return nil
 }
 
-// Get extra field from the Lease object that not belongs to this package.
+// Get extra field(metadata) from the Lease object that not belongs to this package.
 func (l *Lease) Get(key string) (interface{}, bool) {
 	if val, ok := l.extrafields[key]; ok {
 		return val, ok
@@ -149,7 +149,7 @@ func (l *Lease) Get(key string) (interface{}, bool) {
 	return nil, false
 }
 
-// Del deletes extra field of the lease object.
+// Del deletes extra field(metadata) of the lease object.
 func (l *Lease) Del(key string) {
 	var ok bool
 	if _, ok = l.extrafields[key]; ok {
