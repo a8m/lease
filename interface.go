@@ -22,7 +22,7 @@ const (
 )
 
 var (
-	// ErrTokenNotMatch and ErrLeaseNotHeld could be returns only on the Update() call.
+	// ErrTokenNotMatch and ErrLeaseNotHeld could be return only on the Update() call.
 	//
 	// If the concurrency token of the passed-in lease doesn't match the
 	// concurrency token of the authoritative lease, it means the lease was
