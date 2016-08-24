@@ -152,7 +152,7 @@ func TestRenewerCases(t *testing.T) {
 				}
 			}
 			if !found {
-				t.Errorf("%s: expected lease to be exists in result:\n\t%+v\n", l1)
+				t.Errorf("%s: expected lease to be exists in result:\n\t%+v\n", test.name, l1)
 			}
 		}
 	}
