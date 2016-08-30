@@ -37,7 +37,7 @@ func main() {
 		for {
 			// take tasks to handle,
 			// or sleep for a while if there are no tasks to handle
-			if tasks := leaser.GetLeases(); len(tasks) > 0 {
+			if tasks := leaser.GetHeldLeases(); len(tasks) > 0 {
 				for _, task := range tasks {
 					log.WithField("task name", task.Key).Info("start handling")
 					// HANDLE YOUR TASK/JOB HERE
