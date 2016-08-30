@@ -176,8 +176,8 @@ func (l *Lease) hasNoOwner() bool {
 type Leaser interface {
 	Stop()
 	Start() error
-	GetLeases() []Lease
 	Delete(Lease) error
 	Create(Lease) (Lease, error)
 	Update(Lease) (Lease, error)
+	GetHeldLeases() []Lease
 }

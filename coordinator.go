@@ -83,10 +83,10 @@ func (c *Coordinator) Stop() {
 	c.Logger.Info("stopped coordinator")
 }
 
-// GetLeases returns the currently held leases.
+// GetHeldLeases returns the currently held leases.
 // A lease is currently held if we successfully renewed it on the last run of Renewer.Renew().
 // Lease objects returned are copies and their counters will not tick.
-func (c *Coordinator) GetLeases() []Lease {
+func (c *Coordinator) GetHeldLeases() []Lease {
 	return c.Renewer.GetHeldLeases()
 }
 
