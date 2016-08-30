@@ -193,16 +193,12 @@ func (l *LeaseManager) DeleteLease(lease *Lease) (err error) {
 				":condOwner": {
 					S: aws.String(lease.Owner),
 				},
-				":condCounter": {
-					N: aws.String(strconv.Itoa(lease.Counter)),
-				},
 			},
 			ExpressionAttributeNames: map[string]*string{
-				"#counter": aws.String(LeaseCounterKey),
-				"#owner":   aws.String(LeaseOwnerKey),
-				"#key":     aws.String(LeaseKeyKey),
+				"#owner": aws.String(LeaseOwnerKey),
+				"#key":   aws.String(LeaseKeyKey),
 			},
-			ConditionExpression: aws.String("attribute_not_exists(#key) OR #counter = :condCounter AND #owner = :condOwner"),
+			ConditionExpression: aws.String("attribute_not_exists(#key) OR #owner = :condOwner"),
 		})
 
 		if err == nil {
