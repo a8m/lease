@@ -132,7 +132,7 @@ func newWorker(client *dynamodb.DynamoDB, log lease.Logger) chan struct{} {
 			case <-tickCreate:
 				// create 5 random tasks each tick
 				for i := 1; i <= 5; i++ {
-					task := lease.Lease{Key: fmt.Sprintf("task-%d-%d", i, rand.Intn(1e3))}
+					task := lease.NewLease(fmt.Sprintf("task-%d-%d", i, rand.Intn(1e3)))
 					task.Set("created_at", time.Now().Unix())
 					task.Set(TASK_STATUS, CREATED)
 					l, err := leaser.Create(task)
