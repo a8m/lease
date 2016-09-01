@@ -20,6 +20,7 @@ type Clientface interface {
 	UpdateItem(*dynamodb.UpdateItemInput) (*dynamodb.UpdateItemOutput, error)
 	DeleteItem(*dynamodb.DeleteItemInput) (*dynamodb.DeleteItemOutput, error)
 	CreateTable(*dynamodb.CreateTableInput) (*dynamodb.CreateTableOutput, error)
+	DescribeTable(*dynamodb.DescribeTableInput) (*dynamodb.DescribeTableOutput, error)
 }
 
 // Backofface is the interface that holds the backoff strategy
