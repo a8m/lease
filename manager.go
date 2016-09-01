@@ -27,6 +27,10 @@ const (
 	maxCreateRetries = 3
 	maxUpdateRetries = 2
 	maxDeleteRetries = 2
+
+	// Maximum duration to wait until the table in active state
+	maxDurationTableStatus = time.Minute * 5
+	durationBetweenPolls   = time.Second * 10
 )
 
 // Manager wrap the basic operations for leases.
@@ -87,7 +91,37 @@ func (l *LeaseManager) CreateLeaseTable() (err error) {
 			},
 		})
 
+		// if the operation finished successfully, we need to "wait" until
+		// the lease table exists and active.
 		if err == nil {
+			l.Logger.WithField("table name", l.LeaseTable).Debugf("Worker %s creates the lease table and "+
+				"wait maximum %s until it will be %q",
+				l.WorkerId,
+				maxDurationTableStatus,
+				dynamodb.TableStatusActive)
+
+			duration := maxDurationTableStatus
+
+			for {
+				success := false
+
+				if status, ok := l.tableStatus(); ok && status == dynamodb.TableStatusActive {
+					success = true
+				}
+
+				if success || duration == 0 {
+					l.Logger.WithFields(logrus.Fields{
+						"success":    success,
+						"table name": l.LeaseTable,
+						"time taken": maxDurationTableStatus - duration,
+					}).Debugf("Worker %s stop waiting for table creation", l.WorkerId)
+					break
+				}
+
+				time.Sleep(durationBetweenPolls)
+				duration -= durationBetweenPolls
+			}
+
 			break
 		}
 
@@ -107,6 +141,20 @@ func (l *LeaseManager) CreateLeaseTable() (err error) {
 	}
 	l.Backoff.Reset()
 	return
+}
+
+// tableStatus returns the "status" of the table, and boolean
+// that indicates if the operation success.
+//
+// The status could be: "CREATING", "UPDATING", "DELETING" or "ACTIVE"
+func (l *LeaseManager) tableStatus() (string, bool) {
+	resp, err := l.Client.DescribeTable(&dynamodb.DescribeTableInput{
+		TableName: aws.String(l.LeaseTable),
+	})
+	if err != nil {
+		return "", false
+	}
+	return *resp.Table.TableStatus, true
 }
 
 // Renew a lease by incrementing the lease counter.
