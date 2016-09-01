@@ -22,6 +22,11 @@ func TestCreateTable(t *testing.T) {
 			// create table finished successfully
 			new(dynamodb.CreateTableOutput),
 		},
+		methodDescribeTable: {
+			&dynamodb.DescribeTableOutput{Table: &dynamodb.TableDescription{
+				TableStatus: aws.String(dynamodb.TableStatusActive),
+			}},
+		},
 	})
 	manager := newTestManager(client)
 
@@ -222,6 +227,7 @@ const (
 	methodUpdateItem
 	methodDeleteItem
 	methodCreateTable
+	methodDescribeTable
 )
 
 func (m method) String() string {
@@ -233,18 +239,19 @@ func (m method) String() string {
 }
 
 var methodNames = map[method]string{
-	methodCreate:      "CreateLeaseTable",
-	methodLCreate:     "CreateLease",
-	methodDelete:      "DeleteLease",
-	methodRenew:       "RenewLease",
-	methodEvict:       "EvictLease",
-	methodTake:        "TakeLease",
-	methodList:        "ListLeases",
-	methodScan:        "Scan",
-	methodPutItem:     "PutItem",
-	methodUpdateItem:  "UpdateItem",
-	methodDeleteItem:  "DeleteItem",
-	methodCreateTable: "CreateTable",
+	methodCreate:        "CreateLeaseTable",
+	methodLCreate:       "CreateLease",
+	methodDelete:        "DeleteLease",
+	methodRenew:         "RenewLease",
+	methodEvict:         "EvictLease",
+	methodTake:          "TakeLease",
+	methodList:          "ListLeases",
+	methodScan:          "Scan",
+	methodPutItem:       "PutItem",
+	methodUpdateItem:    "UpdateItem",
+	methodDeleteItem:    "DeleteItem",
+	methodCreateTable:   "CreateTable",
+	methodDescribeTable: "DescribeTable",
 }
 
 type clientMock struct {
@@ -336,6 +343,21 @@ func (c *clientMock) CreateTable(*dynamodb.CreateTableInput) (*dynamodb.CreateTa
 		return nil, err
 	}
 	return nil, errors.New("create table failed")
+}
+
+func (c *clientMock) DescribeTable(*dynamodb.DescribeTableInput) (*dynamodb.DescribeTableOutput, error) {
+	c.mcalled(methodDescribeTable)
+	result := c.result[methodDescribeTable][0]
+	if result != nil {
+		out, ok := result.(*dynamodb.DescribeTableOutput)
+		if ok {
+			return out, nil
+		}
+		// allows custom errors. for example: 'ConditionalFailed'
+		err, ok := result.(awserr.Error)
+		return nil, err
+	}
+	return nil, errors.New("describe table failed")
 }
 
 func newTestManager(client Clientface) *LeaseManager {
