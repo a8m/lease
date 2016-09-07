@@ -144,6 +144,22 @@ func (c *Coordinator) Update(lease Lease) (Lease, error) {
 	return *ulease, nil
 }
 
+// ForceUpdate used to update the lease object without checking if the concurrency
+// token is valid or if we already lost this lease.
+//
+// Unlike Update, this method allows you to update the task status,
+// or any other fields even if you lost the lease.
+//
+// for example: {"status": "done", "last_update": "unix seconds"}
+// To add extra fields on a Lease, use Lease.Set(key, val)
+func (c *Coordinator) ForceUpdate(lease Lease) (Lease, error) {
+	ulease, err := c.Manager.UpdateLease(&lease)
+	if err != nil {
+		return lease, err
+	}
+	return *ulease, nil
+}
+
 // loop spawn a goroutine and returns a "done" channel that linked to this goroutine.
 // the interval used to create a ticker to run the given loopFunc each x time and
 // the reason string used for logging.

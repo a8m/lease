@@ -179,5 +179,6 @@ type Leaser interface {
 	Delete(Lease) error
 	Create(Lease) (Lease, error)
 	Update(Lease) (Lease, error)
+	ForceUpdate(Lease) (Lease, error)
 	GetHeldLeases() []Lease
 }
