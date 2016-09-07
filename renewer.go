@@ -57,11 +57,9 @@ func (l *leaseHolder) Renew() error {
 	for _, lease := range leases {
 		if lease.Owner == l.WorkerId {
 			// if we took this lease and it's not holds by this renewer
-			if _, ok := l.heldLeases[lease.Key]; !ok {
-				l.Lock()
-				l.heldLeases[lease.Key] = lease
-				l.Unlock()
-			}
+			l.Lock()
+			l.heldLeases[lease.Key] = lease
+			l.Unlock()
 			if err := l.manager.RenewLease(lease); err != nil {
 				l.Logger.Debugf("Worker %s could not renew lease with key %s", l.WorkerId, lease.Key)
 			}
