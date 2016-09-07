@@ -90,8 +90,9 @@ func (c *Coordinator) GetHeldLeases() []Lease {
 	return c.Renewer.GetHeldLeases()
 }
 
-// Delete the given lease from DB. does nothing when passed alease that does
+// Delete the given lease from DB. does nothing when passed a lease that does
 // not exist in the DB.
+// The deletion is conditional on the fact that the lease is being held by this worker.
 func (c *Coordinator) Delete(l Lease) error {
 	return c.Manager.DeleteLease(&l)
 }
