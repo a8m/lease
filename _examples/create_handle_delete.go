@@ -122,7 +122,9 @@ func newWorker(client *dynamodb.DynamoDB, log lease.Logger) chan struct{} {
 						task.Set(TASK_STATUS, taskStatus)
 						task.Set("last_update", time.Now().Unix())
 						task.SetAs("results", []string{"200", "500", "404"}, lease.StringSet)
-						if _, err := leaser.Update(task); err != nil {
+						// after finishing the job handling we force updating to
+						// avoid duplication work
+						if _, err := leaser.ForceUpdate(task); err != nil {
 							log.WithField("task name", task.Key).WithError(err).Error("update failed")
 						} else {
 							log.WithField("task name", task.Key).Info("updated successfully")
