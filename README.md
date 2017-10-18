@@ -1,11 +1,11 @@
 # Lease [![Build status][travis-image]][travis-url] [![License][license-image]][license-url] [![GoDoc][godoc-img]][godoc-url]
-> A generic lease implementation of the [Amazon-KCL.lease][kcl.lease] package. ideal for manage
-> and partition work across a fleet of workers.
+A generic leasing implementation of the [Amazon-KCL.lease][kcl.lease] package. ideal for manage
+and partition work across a fleet of workers.
 
 ![Screenshot](https://github.com/a8m/lease/blob/master/assets/lease.jpg)
 
 ### What is a Lease ?
-Lease type contains data pertianing to a Lease.  
+Lease type contains data pertianing to a lease.  
 Distributed systems may use leases to partition work across a fleet of workers.  
 Each unit of work (identified by a leaseKey) has a corresponding Lease.  
 Every worker will contend for all leases - only one worker will successfully take each one.  
@@ -13,7 +13,7 @@ The worker should hold the lease until it is ready to stop processing the corres
 or until it fails.  
 When the worker stops holding the lease, another worker will take and hold the lease.
 
-To get started, see [examples][examples]
+To get started, see the [examples][examples]
 
 
 ### License
